@@ -24,7 +24,7 @@ export function PageShell({ children }: { children: React.ReactNode }) {
 
 function TopNav() {
   return (
-    <header className="sticky top-0 z-40 -mx-5 flex items-center justify-between border-b border-cream/10 bg-ink-900/85 px-5 py-4 backdrop-blur-md sm:-mx-8 sm:px-8 lg:-mx-10 lg:px-10">
+    <header className="sticky top-0 z-40 -mx-5 flex items-center justify-between border-b border-line bg-ink-900/85 px-5 py-4 backdrop-blur-md sm:-mx-8 sm:px-8 lg:-mx-10 lg:px-10">
       <Link href="/dashboard" className="group flex items-center gap-2.5">
         <span className="relative grid h-7 w-7 place-items-center overflow-hidden rounded-[6px]">
           <span className="absolute inset-0 bg-brand-rainbow" />

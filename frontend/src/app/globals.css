@@ -65,17 +65,17 @@ body {
   color: rgba(239, 239, 229, 0.55);
 }
 
-/* Thin full-width hairline rule (matches .hero-bottom-line) */
+/* Thin full-width hairline rule (matches the landing's #353539 dividers) */
 .hairline {
   height: 1px;
   width: 100%;
-  background: rgba(239, 239, 229, 0.16);
+  background: #353539;
 }
 
-/* Rainbow hairline (used sparingly as an accent) */
+/* Rainbow hairline — the canonical landing brand gradient */
 .rainbow-rule {
   height: 2px;
-  background: linear-gradient(90deg, #724ce8 0%, #3898ec 24%, #26f4d0 50%, #f8cf3e 74%, #fc6756 100%);
+  background: linear-gradient(90deg, #fc6756, #f8cf3e 38%, #26f4d0 52%, #724ce8);
 }
 
 /*
@@ -92,10 +92,10 @@ body {
   padding: 1.1rem 0 0 1.4rem;
   background:
     linear-gradient(#0a090f, #0a090f) padding-box,
-    linear-gradient(125deg, #724ce8 0%, #3898ec 45%, #26f4d0 100%) border-box;
+    linear-gradient(125deg, #724ce8 0%, #26f4d0 100%) border-box;
 }
 
-/* Companion bottom-right bracket (yellow -> coral), recreating the lower stroke */
+/* Companion bottom-right bracket (teal -> yellow -> coral), recreating the lower stroke */
 .title-frame-br {
   border: 0 solid transparent;
   border-bottom-width: 2px;
@@ -107,10 +107,10 @@ body {
     linear-gradient(125deg, #26f4d0 0%, #f8cf3e 55%, #fc6756 100%) border-box;
 }
 
-/* Crisp HUD box — 1px cream border like .hero-slider-wrap / .hero-slider-quote */
+/* Crisp HUD box — 1px #353539 border like the landing's framed panels */
 .hud-box {
-  border: 1px solid rgba(239, 239, 229, 0.18);
-  background: rgba(239, 239, 229, 0.012);
+  border: 1px solid #353539;
+  background: #09090e;
 }
 
 .react-flow__node {
