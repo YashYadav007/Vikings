@@ -25,6 +25,8 @@ OPENAI_API_KEY=
 PORT=4000
 LLM_PROVIDER=openai
 USE_MOCK_LLM=true
+GITHUB_TOKEN=
+TEST_GITHUB_REPO=
 MEMORY_PROVIDER=local
 HINDSIGHT_API_URL=
 HINDSIGHT_API_KEY=
@@ -33,6 +35,10 @@ HINDSIGHT_FALLBACK_MODE=local
 ```
 
 `USE_MOCK_LLM=true` runs fully offline without an OpenAI key. Set `USE_MOCK_LLM=false` and provide `OPENAI_API_KEY` to use OpenAI.
+
+`GITHUB_TOKEN` is optional. Public repo import works without it, but unauthenticated GitHub requests have lower rate limits.
+
+`TEST_GITHUB_REPO` is optional and only used by `npm run smoke` to run import checks.
 
 `MEMORY_PROVIDER=local` is the default. Retained memories persist in `backend/.data/runtime-memories.json`. Generated task records persist in `backend/.data/tasks.json`.
 
@@ -114,3 +120,34 @@ npm run smoke
 - List: `GET /v1/default/banks/{bank_id}/memories/list`
 
 The local provider remains the reliable fallback and audit cache.
+
+## GitHub Import
+
+Import a public repository:
+
+```bash
+curl -X POST http://localhost:4000/api/repos/import \
+  -H 'Content-Type: application/json' \
+  -d '{"repoUrl":"https://github.com/octocat/Hello-World"}'
+```
+
+Supported URLs:
+
+- `https://github.com/owner/repo`
+- `https://github.com/owner/repo.git`
+
+Import behavior:
+
+- Fetches repo metadata, default branch, recursive tree, and selected file contents.
+- Ignores generated, binary, media, lockfile, and large files.
+- Imports at most 40 useful files for the MVP.
+- Chunks files into line-based chunks of up to 80 lines with 10-line overlap.
+- Persists projects in `backend/.data/projects.json`.
+- Persists chunks in `backend/.data/rag-chunks.json`.
+- Retains an initial `architecture` memory through the active memory provider.
+
+Run optional import smoke:
+
+```bash
+TEST_GITHUB_REPO=https://github.com/octocat/Hello-World npm run smoke
+```

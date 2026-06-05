@@ -7,13 +7,19 @@ import { createGraphRouter } from "./routes/graph.routes";
 import { createMemoryRouter } from "./routes/memory.routes";
 import { createProjectsRouter } from "./routes/projects.routes";
 import { createRagRouter } from "./routes/rag.routes";
+import { createReposRouter } from "./routes/repos.routes";
 import { createTasksRouter } from "./routes/tasks.routes";
 import { AgentService } from "./services/agent.service";
+import { ChunkingService } from "./services/chunking.service";
+import { FileFilterService } from "./services/file-filter.service";
+import { GitHubService } from "./services/github.service";
 import { GraphService } from "./services/graph.service";
 import { LlmService } from "./services/llm.service";
 import { LocalMemoryService } from "./services/local-memory.service";
 import { LocalRagService } from "./services/local-rag.service";
 import { createMemoryProvider } from "./services/memory/memory-provider.factory";
+import { ProjectService } from "./services/project.service";
+import { RepoAnalyzerService } from "./services/repo-analyzer.service";
 import { TaskService } from "./services/task.service";
 
 dotenv.config();
@@ -26,6 +32,11 @@ const memoryService = new LocalMemoryService(createMemoryProvider());
 const llmService = new LlmService();
 const graphService = new GraphService();
 const taskService = new TaskService();
+const projectService = new ProjectService(ragService, memoryService);
+const githubService = new GitHubService();
+const fileFilterService = new FileFilterService();
+const chunkingService = new ChunkingService();
+const repoAnalyzerService = new RepoAnalyzerService();
 const agentService = new AgentService(ragService, memoryService, llmService, taskService);
 
 app.use(cors());
@@ -38,12 +49,24 @@ app.get("/health", (_req, res) => {
   });
 });
 
-app.use("/api/projects", createProjectsRouter(ragService, memoryService, graphService));
+app.use("/api/projects", createProjectsRouter(projectService, ragService, memoryService, graphService, taskService));
 app.use("/api/rag", createRagRouter(ragService));
 app.use("/api/memory", createMemoryRouter(memoryService));
 app.use("/api/chat", createChatRouter(agentService));
-app.use("/api/graph", createGraphRouter(graphService));
+app.use("/api/graph", createGraphRouter(graphService, projectService, ragService, memoryService, taskService));
 app.use("/api/tasks", createTasksRouter(taskService));
+app.use(
+  "/api/repos",
+  createReposRouter(
+    githubService,
+    fileFilterService,
+    chunkingService,
+    repoAnalyzerService,
+    projectService,
+    ragService,
+    memoryService,
+  ),
+);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });

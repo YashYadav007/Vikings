@@ -1,6 +1,6 @@
-export type ProjectId = "demo-shopease";
+export type ProjectId = string;
 
-export type MemoryType = "bug" | "decision" | "style" | "risk" | "preference" | "task";
+export type MemoryType = "bug" | "decision" | "style" | "risk" | "preference" | "task" | "architecture";
 
 export interface ProjectModule {
   id: string;
@@ -13,19 +13,33 @@ export interface ProjectBrain {
   id: ProjectId;
   name: string;
   repoUrl: string;
+  owner?: string;
+  repoName?: string;
+  defaultBranch?: string;
+  description?: string;
   stack: string[];
   modules: ProjectModule[];
+  architecture?: string;
   riskAreas: string[];
   lastTask: string;
+  memoryCount?: number;
+  chunkCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface RagChunk {
   id: string;
   projectId: ProjectId;
   filePath: string;
+  language?: string;
   module: string;
   summary: string;
   content: string;
+  startLine?: number;
+  endLine?: number;
+  symbols?: string[];
+  source?: "github" | "seed";
 }
 
 export interface ScoredRagChunk extends RagChunk {
@@ -133,4 +147,48 @@ export interface GeneratedTask {
   memoriesUsedCount: number;
   patchPreview: PatchPreview[];
   status: "generated";
+}
+
+export interface ImportedProject extends ProjectBrain {
+  owner: string;
+  repoName: string;
+  defaultBranch: string;
+  description: string;
+  architecture: string;
+  memoryCount: number;
+  chunkCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GitHubRepoMetadata {
+  owner: string;
+  repoName: string;
+  name: string;
+  fullName: string;
+  description: string;
+  repoUrl: string;
+  defaultBranch: string;
+  language?: string;
+}
+
+export interface GitHubTreeFile {
+  path: string;
+  size: number;
+  type: "blob" | "tree" | string;
+}
+
+export interface RepoFile {
+  path: string;
+  content: string;
+  size: number;
+}
+
+export interface RepoAnalysis {
+  stack: string[];
+  modules: ProjectModule[];
+  architecture: string;
+  riskAreas: string[];
+  importantFiles: string[];
+  codingConventions: string[];
 }

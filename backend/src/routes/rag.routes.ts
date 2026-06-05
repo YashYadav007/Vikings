@@ -3,7 +3,7 @@ import { z } from "zod";
 import { LocalRagService } from "../services/local-rag.service";
 
 const ragSearchSchema = z.object({
-  projectId: z.literal("demo-shopease"),
+  projectId: z.string().min(1),
   query: z.string().min(1),
 });
 
@@ -17,6 +17,13 @@ export function createRagRouter(ragService: LocalRagService): Router {
     } catch (error) {
       next(error);
     }
+  });
+
+  router.get("/:projectId/chunks", (req, res) => {
+    res.json({
+      projectId: req.params.projectId,
+      chunks: ragService.listChunks(req.params.projectId),
+    });
   });
 
   return router;

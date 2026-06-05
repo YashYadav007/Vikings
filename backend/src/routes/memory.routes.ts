@@ -3,28 +3,28 @@ import { z } from "zod";
 import { LocalMemoryService } from "../services/local-memory.service";
 
 const projectParamSchema = z.object({
-  projectId: z.literal("demo-shopease"),
+  projectId: z.string().min(1),
 });
 
 const memoryRecallSchema = z.object({
-  projectId: z.literal("demo-shopease"),
+  projectId: z.string().min(1),
   query: z.string().min(1),
 });
 
 const memoryDraftSchema = z.object({
-  type: z.enum(["bug", "decision", "style", "risk", "preference", "task"]),
+  type: z.enum(["bug", "decision", "style", "risk", "preference", "task", "architecture"]),
   title: z.string().min(1),
   content: z.string().min(1),
   relatedFiles: z.array(z.string()),
 });
 
 const memoryRetainSchema = z.object({
-  projectId: z.literal("demo-shopease"),
+  projectId: z.string().min(1),
   memory: memoryDraftSchema,
 });
 
 const memoryReflectSchema = z.object({
-  projectId: z.literal("demo-shopease"),
+  projectId: z.string().min(1),
   query: z.string().min(1),
   context: z.unknown().optional(),
 });

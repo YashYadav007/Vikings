@@ -102,6 +102,11 @@ export class LlmService {
     chunks: ScoredRagChunk[],
     memories: ScoredMemory[],
   ): MemoryPoweredAnswer {
+    const hasShopEaseCart = chunks.some((chunk) => chunk.filePath === "src/lib/cartService.ts");
+    if (!hasShopEaseCart) {
+      return this.generateGenericProjectMockAnswer(message, chunks, memories);
+    }
+
     const cartChunk = chunks.find((chunk) => chunk.filePath === "src/lib/cartService.ts") ?? chunks[0];
     const checkoutChunk = chunks.find((chunk) => chunk.filePath === "src/app/api/checkout/route.ts");
     const validationMemory = memories.find((memory) => memory.title === "Validation style");
@@ -174,6 +179,55 @@ export class LlmService {
           title: "Coupon calculation order",
           content: "Apply coupon after quantity normalization but before checkout summary generation.",
           relatedFiles: ["src/lib/cartService.ts", "src/app/api/checkout/route.ts"],
+        },
+      ],
+      chunksUsed: chunks,
+      rawMemoriesUsed: memories,
+    };
+  }
+
+  private generateGenericProjectMockAnswer(
+    message: string,
+    chunks: ScoredRagChunk[],
+    memories: ScoredMemory[],
+  ): MemoryPoweredAnswer {
+    const primaryChunks = chunks.slice(0, 3);
+    const files = primaryChunks.map((chunk) => chunk.filePath);
+    const architectureMemory = memories.find((memory) => memory.type === "architecture");
+
+    return {
+      taskType: "analysis",
+      answer: [
+        `For "${message}", use the imported repository context instead of generic assumptions.`,
+        primaryChunks.length > 0
+          ? `The most relevant indexed files are ${files.join(", ")}.`
+          : "No indexed chunks matched strongly, so start from the project summary and README if available.",
+        architectureMemory
+          ? `The architecture memory says: ${architectureMemory.content}`
+          : "No durable architecture memory was recalled yet.",
+      ].join(" "),
+      filesUsed: primaryChunks.map((chunk) => ({
+        path: chunk.filePath,
+        reason: `${chunk.summary} Matched local RAG keyword search with score ${chunk.score}.`,
+      })),
+      memoriesUsed: memories.map((memory) => ({
+        type: memory.type,
+        title: memory.title,
+        content: memory.content,
+      })),
+      patchPreview: primaryChunks.slice(0, 2).map((chunk) => ({
+        filePath: chunk.filePath,
+        changeSummary: "Review this file before proposing edits; it is part of the imported project context.",
+        diff: "pseudo diff pending concrete implementation request",
+      })),
+      testsToRun: ["project build/test command from package manifest if present", "targeted tests around touched files"],
+      risks: memories.filter((memory) => memory.type === "risk").map((memory) => memory.content),
+      memoryToSave: [
+        {
+          type: "task",
+          title: "Imported project task outcome",
+          content: `Record the durable outcome after completing: ${message}`,
+          relatedFiles: files,
         },
       ],
       chunksUsed: chunks,

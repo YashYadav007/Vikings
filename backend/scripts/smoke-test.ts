@@ -1,6 +1,8 @@
 const baseUrl = process.env.BASE_URL ?? "http://localhost:4000";
 const hindsightConfigured = Boolean(process.env.HINDSIGHT_API_URL && process.env.HINDSIGHT_API_KEY);
 const memoryProvider = process.env.MEMORY_PROVIDER ?? "local";
+const testGitHubRepo = process.env.TEST_GITHUB_REPO;
+let importedProjectId: string | null = null;
 
 class SkipSmokeCheck extends Error {
   constructor(message: string) {
@@ -184,6 +186,89 @@ const checks: SmokeCheck[] = [
         }),
       });
       expect(Array.isArray(recall.memories), "Expected Hindsight recall memories array");
+    },
+  },
+  {
+    name: "GitHub import optional path",
+    run: async () => {
+      if (!testGitHubRepo) {
+        throw new SkipSmokeCheck("TEST_GITHUB_REPO is not configured.");
+      }
+
+      const result = await request("/api/repos/import", {
+        method: "POST",
+        body: JSON.stringify({ repoUrl: testGitHubRepo }),
+      });
+      const project = result.project as { id?: string; chunkCount?: number };
+      const summary = result.importSummary as { chunksCreated?: number };
+      expect(typeof project.id === "string", "Expected imported project id");
+      expect((summary.chunksCreated ?? 0) > 0, "Expected imported chunks");
+      importedProjectId = project.id;
+    },
+  },
+  {
+    name: "GET imported project",
+    run: async () => {
+      if (!importedProjectId) {
+        throw new SkipSmokeCheck("No imported project from TEST_GITHUB_REPO.");
+      }
+      const result = await request(`/api/projects/${importedProjectId}`);
+      expect(result.id === importedProjectId, "Expected imported project details");
+    },
+  },
+  {
+    name: "POST imported project RAG search",
+    run: async () => {
+      if (!importedProjectId) {
+        throw new SkipSmokeCheck("No imported project from TEST_GITHUB_REPO.");
+      }
+      const result = await request("/api/rag/search", {
+        method: "POST",
+        body: JSON.stringify({
+          projectId: importedProjectId,
+          query: "README package source",
+        }),
+      });
+      expect(Array.isArray(result.chunks), "Expected imported RAG chunks array");
+    },
+  },
+  {
+    name: "GET imported project RAG chunks",
+    run: async () => {
+      if (!importedProjectId) {
+        throw new SkipSmokeCheck("No imported project from TEST_GITHUB_REPO.");
+      }
+      const result = await request(`/api/rag/${importedProjectId}/chunks`);
+      expect(result.projectId === importedProjectId, "Expected imported chunk project id");
+      expect(Array.isArray(result.chunks), "Expected imported chunks array");
+    },
+  },
+  {
+    name: "GET imported project graph",
+    run: async () => {
+      if (!importedProjectId) {
+        throw new SkipSmokeCheck("No imported project from TEST_GITHUB_REPO.");
+      }
+      const result = await request(`/api/projects/${importedProjectId}/graph`);
+      expect(Array.isArray(result.nodes), "Expected imported graph nodes");
+      expect(Array.isArray(result.edges), "Expected imported graph edges");
+    },
+  },
+  {
+    name: "POST imported project chat compare",
+    run: async () => {
+      if (!importedProjectId) {
+        throw new SkipSmokeCheck("No imported project from TEST_GITHUB_REPO.");
+      }
+      const result = await request("/api/chat/compare", {
+        method: "POST",
+        body: JSON.stringify({
+          projectId: importedProjectId,
+          message: "Summarize the project architecture",
+        }),
+      });
+      expect(typeof result.genericAnswer === "string", "Expected imported generic answer");
+      expect(typeof result.memoryAnswer === "string", "Expected imported memory answer");
     },
   },
 ];

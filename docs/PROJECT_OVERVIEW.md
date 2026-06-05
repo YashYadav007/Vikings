@@ -12,9 +12,12 @@ Every GitHub repository gets a persistent Project Brain:
 
 Sprint 3 adds a real Hindsight HTTP provider behind the memory abstraction while preserving the local JSON fallback. Each project maps to one memory bank, such as `devcontext:demo-shopease`.
 
+Sprint 4 adds public GitHub repository import. DevContext OS can now fetch a public repo, filter useful files, chunk code, persist a local project brain, index chunks for keyword RAG, and retain an initial architecture memory.
+
 Still mocked or local:
 
 - RAG is local keyword search.
-- GitHub import is not implemented.
+- GitHub import is public-repo only and capped at the top 40 useful files.
 - pgvector is not implemented.
+- PR creation is not implemented.
 - Local JSON remains the fallback and audit cache for memory and generated tasks.

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { AgentService } from "../services/agent.service";
 
 const chatSchema = z.object({
-  projectId: z.literal("demo-shopease"),
+  projectId: z.string().min(1),
   message: z.string().min(1),
 });
 

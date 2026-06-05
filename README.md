@@ -26,6 +26,7 @@ curl http://localhost:4000/health
 ## Current Scope
 
 - Local mock RAG over seeded code chunks.
+- Public GitHub repository import into local Project Brain data.
 - Provider-backed memory layer with local JSON fallback.
 - Optional Hindsight HTTP memory provider.
 - Local retained memories in `backend/.data/runtime-memories.json`.
@@ -39,7 +40,8 @@ curl http://localhost:4000/health
 
 - Supabase or pgvector.
 - Database persistence.
-- GitHub repository import.
+- Private GitHub repository import.
+- GitHub PR creation.
 - Frontend UI.
 
 ## Memory Provider
@@ -66,7 +68,30 @@ Each project gets one bank ID: `{HINDSIGHT_PROJECT_PREFIX}:{projectId}`. Example
 
 If Hindsight credentials are missing or a Hindsight request fails, the backend falls back to the local JSON provider.
 
-RAG remains local keyword search. GitHub import and pgvector are still future work.
+RAG remains local keyword search. pgvector, private repo import, and PR creation are still future work.
+
+## Import A Public GitHub Repo
+
+```bash
+curl -X POST http://localhost:4000/api/repos/import \
+  -H 'Content-Type: application/json' \
+  -d '{"repoUrl":"https://github.com/octocat/Hello-World"}'
+```
+
+`GITHUB_TOKEN` is optional for public repos, but recommended for rate limits.
+
+Imported project data is persisted locally:
+
+- `backend/.data/projects.json`
+- `backend/.data/rag-chunks.json`
+
+Use the returned `project.id` with existing APIs:
+
+- `GET /api/projects/:projectId`
+- `POST /api/chat/compare`
+- `GET /api/projects/:projectId/graph`
+- `GET /api/projects/:projectId/memory`
+- `GET /api/rag/:projectId/chunks`
 
 ## Generated Files
 

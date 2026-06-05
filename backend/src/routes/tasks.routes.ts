@@ -3,7 +3,7 @@ import { z } from "zod";
 import { TaskService } from "../services/task.service";
 
 const projectParamSchema = z.object({
-  projectId: z.literal("demo-shopease"),
+  projectId: z.string().min(1),
 });
 
 export function createTasksRouter(taskService: TaskService): Router {

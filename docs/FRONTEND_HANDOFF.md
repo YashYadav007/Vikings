@@ -27,6 +27,26 @@ Render `genericAnswer` beside `memoryAnswer`. Show `chunksUsed`, `memoriesUsed`,
 
 Sprint 3 adds optional `memoryProvider` to this response. Frontend can show it as a small badge (`local` or `hindsight`) without changing the existing compare panel.
 
+For imported projects, use the `project.id` returned by `POST /api/repos/import` as `projectId`.
+
+## Repository Import
+
+Use:
+
+```http
+POST /api/repos/import
+```
+
+Request:
+
+```json
+{
+  "repoUrl": "https://github.com/owner/repo"
+}
+```
+
+The response returns `project` and `importSummary`. Store `project.id` in frontend state, then call the existing project brain, graph, memory, RAG debug, and chat APIs with that ID.
+
 ## Graph
 
 Use:
@@ -37,6 +57,12 @@ GET /api/projects/demo-shopease/graph
 
 The response is React Flow-compatible: `nodes` and `edges`, with `id`, `type`, `data.label`, and `position`.
 
+For imported projects:
+
+```http
+GET /api/projects/:projectId/graph
+```
+
 ## Memory Timeline
 
 Use:
@@ -46,6 +72,12 @@ GET /api/projects/demo-shopease/memory
 ```
 
 Memories are returned chronologically.
+
+For imported projects:
+
+```http
+GET /api/projects/:projectId/memory
+```
 
 ## Memory Debug/Export
 
@@ -85,6 +117,22 @@ GET /api/projects/demo-shopease
 
 This contains stack, modules, risk areas, memory count, chunk count, and last task.
 
+Imported projects use:
+
+```http
+GET /api/projects/:projectId
+```
+
+## RAG Debug
+
+Use:
+
+```http
+GET /api/rag/:projectId/chunks
+```
+
+This shows the indexed local chunks for a project.
+
 ## Notes
 
 - Mock mode returns deterministic content and is suitable for the hackathon demo.
@@ -93,5 +141,6 @@ This contains stack, modules, risk areas, memory count, chunk count, and last ta
 - Retained memories persist locally in `backend/.data/runtime-memories.json`.
 - Hindsight provider can be enabled with env vars. Each project maps to one bank ID, e.g. `devcontext:demo-shopease`.
 - If Hindsight is not configured or a call fails, backend falls back to local memory.
-- RAG, GitHub import, and pgvector are still not implemented.
+- Public GitHub import is available; pgvector and PR creation are still future work.
+- Imports are limited to the top 40 useful files for the MVP.
 - No frontend code should be placed under `backend/`.

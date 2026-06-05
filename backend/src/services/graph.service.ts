@@ -1,96 +1,90 @@
-import { ProjectGraph } from "../types";
+import { GeneratedTask, Memory, ProjectBrain, ProjectGraph, RagChunk } from "../types";
 
 export class GraphService {
-  getProjectGraph(): ProjectGraph {
-    return {
-      nodes: [
-        { id: "project-demo-shopease", type: "project", data: { label: "ShopEase" }, position: { x: 400, y: 0 } },
-        { id: "module-auth", type: "module", data: { label: "Auth" }, position: { x: 40, y: 160 } },
-        { id: "module-cart", type: "module", data: { label: "Cart" }, position: { x: 280, y: 160 } },
-        { id: "module-checkout", type: "module", data: { label: "Checkout" }, position: { x: 520, y: 160 } },
-        { id: "module-products", type: "module", data: { label: "Products" }, position: { x: 760, y: 160 } },
-        {
-          id: "file-cart-service",
+  getProjectGraph(project: ProjectBrain, memories: Memory[], tasks: GeneratedTask[], chunks: RagChunk[]): ProjectGraph {
+    const nodes: ProjectGraph["nodes"] = [];
+    const edges: ProjectGraph["edges"] = [];
+    const projectNodeId = `project-${project.id}`;
+
+    nodes.push({
+      id: projectNodeId,
+      type: "project",
+      data: { label: project.name },
+      position: { x: 400, y: 0 },
+    });
+
+    project.modules.forEach((module, index) => {
+      const moduleId = module.id || `module-${this.slug(module.name)}`;
+      nodes.push({
+        id: moduleId,
+        type: "module",
+        data: { label: module.name, summary: module.summary },
+        position: { x: 80 + index * 240, y: 160 },
+      });
+      edges.push({ id: `edge-${projectNodeId}-${moduleId}`, source: projectNodeId, target: moduleId, label: "has module" });
+
+      const moduleFiles = module.files.length > 0 ? module.files : chunks.filter((chunk) => chunk.module === module.name).map((chunk) => chunk.filePath);
+      [...new Set(moduleFiles)].slice(0, 5).forEach((filePath, fileIndex) => {
+        const fileId = `file-${this.slug(`${module.name}-${filePath}`)}`;
+        nodes.push({
+          id: fileId,
           type: "file",
-          data: { label: "src/lib/cartService.ts" },
-          position: { x: 220, y: 320 },
-        },
-        {
-          id: "file-checkout-route",
-          type: "file",
-          data: { label: "src/app/api/checkout/route.ts" },
-          position: { x: 500, y: 320 },
-        },
-        { id: "file-auth", type: "file", data: { label: "src/lib/auth.ts" }, position: { x: 20, y: 320 } },
-        {
-          id: "memory-cart-bug",
-          type: "memory",
-          data: { label: "Bug: Cart quantity bug" },
-          position: { x: 160, y: 500 },
-        },
-        {
-          id: "memory-coupon-order",
-          type: "memory",
-          data: { label: "Decision: Coupon calculation order" },
-          position: { x: 420, y: 500 },
-        },
-        {
-          id: "memory-validation-style",
-          type: "memory",
-          data: { label: "Style: Zod validation" },
-          position: { x: 680, y: 500 },
-        },
-        { id: "task-add-coupon", type: "task", data: { label: "Add coupon support" }, position: { x: 420, y: 680 } },
-        {
-          id: "risk-checkout-total",
-          type: "risk",
-          data: { label: "Checkout total mismatch" },
-          position: { x: 420, y: 840 },
-        },
-      ],
-      edges: [
-        { id: "edge-project-auth", source: "project-demo-shopease", target: "module-auth", label: "has module" },
-        { id: "edge-project-cart", source: "project-demo-shopease", target: "module-cart", label: "has module" },
-        {
-          id: "edge-project-checkout",
-          source: "project-demo-shopease",
-          target: "module-checkout",
-          label: "has module",
-        },
-        { id: "edge-project-products", source: "project-demo-shopease", target: "module-products", label: "has module" },
-        { id: "edge-auth-file", source: "module-auth", target: "file-auth", label: "owns file" },
-        { id: "edge-cart-file", source: "module-cart", target: "file-cart-service", label: "owns file" },
-        {
-          id: "edge-checkout-file",
-          source: "module-checkout",
-          target: "file-checkout-route",
-          label: "owns file",
-        },
-        { id: "edge-cart-bug", source: "module-cart", target: "memory-cart-bug", label: "has memory" },
-        { id: "edge-cart-decision", source: "module-cart", target: "memory-coupon-order", label: "has memory" },
-        {
-          id: "edge-checkout-style",
-          source: "module-checkout",
-          target: "memory-validation-style",
+          data: { label: filePath },
+          position: { x: 60 + index * 240, y: 320 + fileIndex * 70 },
+        });
+        edges.push({ id: `edge-${moduleId}-${fileId}`, source: moduleId, target: fileId, label: "owns file" });
+      });
+    });
+
+    memories.slice(0, 8).forEach((memory, index) => {
+      const memoryId = `memory-${this.slug(memory.id)}`;
+      const relatedModule = project.modules.find((module) => memory.relatedFiles.some((file) => module.files.includes(file))) ?? project.modules[0];
+      nodes.push({
+        id: memoryId,
+        type: "memory",
+        data: { label: `${this.toTitle(memory.type)}: ${memory.title}` },
+        position: { x: 80 + (index % 4) * 240, y: 560 + Math.floor(index / 4) * 100 },
+      });
+      if (relatedModule) {
+        edges.push({
+          id: `edge-${relatedModule.id}-${memoryId}`,
+          source: relatedModule.id,
+          target: memoryId,
           label: "has memory",
-        },
-        { id: "edge-memory-bug-task", source: "memory-cart-bug", target: "task-add-coupon", label: "influences task" },
-        {
-          id: "edge-memory-decision-task",
-          source: "memory-coupon-order",
-          target: "task-add-coupon",
-          label: "influences task",
-        },
-        {
-          id: "edge-memory-style-task",
-          source: "memory-validation-style",
-          target: "task-add-coupon",
-          label: "influences task",
-        },
-        { id: "edge-task-cart-file", source: "task-add-coupon", target: "file-cart-service", label: "touches file" },
-        { id: "edge-task-checkout-file", source: "task-add-coupon", target: "file-checkout-route", label: "touches file" },
-        { id: "edge-task-risk", source: "task-add-coupon", target: "risk-checkout-total", label: "has risk" },
-      ],
-    };
+        });
+      }
+    });
+
+    tasks.slice(-5).forEach((task, index) => {
+      const taskId = `task-${this.slug(task.id)}`;
+      nodes.push({
+        id: taskId,
+        type: "task",
+        data: { label: task.message },
+        position: { x: 120 + index * 220, y: 780 },
+      });
+      edges.push({ id: `edge-${projectNodeId}-${taskId}`, source: projectNodeId, target: taskId, label: "generated task" });
+    });
+
+    project.riskAreas.slice(0, 6).forEach((risk, index) => {
+      const riskId = `risk-${this.slug(risk)}`;
+      nodes.push({
+        id: riskId,
+        type: "risk",
+        data: { label: risk },
+        position: { x: 120 + index * 220, y: 940 },
+      });
+      edges.push({ id: `edge-${projectNodeId}-${riskId}`, source: projectNodeId, target: riskId, label: "has risk" });
+    });
+
+    return { nodes, edges };
+  }
+
+  private slug(value: string): string {
+    return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  }
+
+  private toTitle(value: string): string {
+    return value.charAt(0).toUpperCase() + value.slice(1);
   }
 }
