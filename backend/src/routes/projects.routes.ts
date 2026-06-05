@@ -30,7 +30,7 @@ export function createProjectsRouter(
     }
   });
 
-  router.delete("/:projectId", (req, res, next) => {
+  router.delete("/:projectId", async (req, res, next) => {
     try {
       const { projectId } = req.params;
       if (projectId === "demo-shopease") {
@@ -39,7 +39,7 @@ export function createProjectsRouter(
       }
 
       const projectDeleted = projectService.deleteImportedProject(projectId);
-      const chunksCleared = ragService.clearProjectChunksWithCount(projectId);
+      const chunksCleared = await ragService.clearProjectChunksWithCount(projectId);
       const memoriesCleared = memoryService.clearProject(projectId);
       const tasksCleared = taskService.clearProject(projectId);
 
@@ -69,11 +69,12 @@ export function createProjectsRouter(
   router.get("/:projectId/graph", async (req, res, next) => {
     try {
       const project = await projectService.getProject(req.params.projectId);
-      const [memories, tasks] = await Promise.all([
+      const [memories, tasks, chunks] = await Promise.all([
         memoryService.list(req.params.projectId),
         Promise.resolve(taskService.list(req.params.projectId)),
+        ragService.listChunks(req.params.projectId),
       ]);
-      res.json(graphService.getProjectGraph(project, memories, tasks, ragService.listChunks(req.params.projectId)));
+      res.json(graphService.getProjectGraph(project, memories, tasks, chunks));
     } catch (error) {
       next(error);
     }

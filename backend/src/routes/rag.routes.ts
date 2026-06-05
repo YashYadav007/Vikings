@@ -10,20 +10,32 @@ const ragSearchSchema = z.object({
 export function createRagRouter(ragService: LocalRagService): Router {
   const router = Router();
 
-  router.post("/search", (req, res, next) => {
+  router.get("/provider/status", (_req, res) => {
+    res.json(ragService.status());
+  });
+
+  router.post("/search", async (req, res, next) => {
     try {
       const body = ragSearchSchema.parse(req.body);
-      res.json({ chunks: ragService.search(body.projectId, body.query) });
+      res.json({
+        chunks: await ragService.search(body.projectId, body.query),
+        provider: ragService.providerName,
+        semanticSearch: ragService.providerName === "pgvector",
+      });
     } catch (error) {
       next(error);
     }
   });
 
-  router.get("/:projectId/chunks", (req, res) => {
-    res.json({
-      projectId: req.params.projectId,
-      chunks: ragService.listChunks(req.params.projectId),
-    });
+  router.get("/:projectId/chunks", async (req, res, next) => {
+    try {
+      res.json({
+        projectId: req.params.projectId,
+        chunks: await ragService.listChunks(req.params.projectId),
+      });
+    } catch (error) {
+      next(error);
+    }
   });
 
   return router;

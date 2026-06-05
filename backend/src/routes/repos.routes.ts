@@ -72,8 +72,9 @@ export function createReposRouter(
         updatedAt: now,
       };
 
-      ragService.clearProjectChunks(projectId);
-      ragService.indexChunks(projectId, chunks);
+      await ragService.clearProjectChunks(projectId);
+      const ragIndexResult = await ragService.indexChunks(projectId, chunks);
+      warnings.push(...ragIndexResult.warnings);
       const savedProject = projectService.saveImportedProject(project);
 
       let memoryRetained = false;
@@ -98,6 +99,8 @@ export function createReposRouter(
           chunksCreated: chunks.length,
           memoryRetained,
           projectReused,
+          ragProvider: ragIndexResult.provider,
+          semanticIndex: ragIndexResult.semanticIndex,
           warnings,
         },
       });

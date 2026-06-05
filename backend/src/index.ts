@@ -11,6 +11,7 @@ import { createPatchesRouter } from "./routes/patches.routes";
 import { createProjectsRouter } from "./routes/projects.routes";
 import { createRagRouter } from "./routes/rag.routes";
 import { createReposRouter } from "./routes/repos.routes";
+import { createSystemRouter } from "./routes/system.routes";
 import { createTasksRouter } from "./routes/tasks.routes";
 import { AgentService } from "./services/agent.service";
 import { AgentExecutionService } from "./services/agent-execution.service";
@@ -74,6 +75,7 @@ app.use("/api/patches", createPatchesRouter(agentExecutionService));
 app.use("/api/graph", createGraphRouter(graphService, projectService, ragService, memoryService, taskService));
 app.use("/api/tasks", createTasksRouter(taskService));
 app.use("/api/dev", createDevRouter(projectService, ragService, memoryService, taskService));
+app.use("/api/system", createSystemRouter(memoryService, ragService, llmService, githubWriteService));
 app.use(
   "/api/repos",
   createReposRouter(

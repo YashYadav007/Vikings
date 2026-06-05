@@ -6,7 +6,7 @@ Base URL:
 http://localhost:4000
 ```
 
-Existing Sprint 1-4 response shapes remain compatible. Sprint 5 adds safe agent execution and approved patch apply APIs.
+Existing Sprint 1-5 response shapes remain compatible. Sprint 6 adds semantic RAG provider status, system status, and Hindsight verification APIs.
 
 ## Health And Projects
 
@@ -69,6 +69,8 @@ Response:
     "chunksCreated": 1,
     "memoryRetained": true,
     "projectReused": false,
+    "ragProvider": "local",
+    "semanticIndex": false,
     "warnings": []
   }
 }
@@ -90,7 +92,29 @@ Response:
 
 ```json
 {
-  "chunks": []
+  "chunks": [],
+  "provider": "local",
+  "semanticSearch": false
+}
+```
+
+Provider status:
+
+```bash
+curl http://localhost:4000/api/rag/provider/status
+```
+
+Response:
+
+```json
+{
+  "configuredProvider": "pgvector",
+  "activeProvider": "local",
+  "pgvectorConfigured": false,
+  "supabaseConfigured": false,
+  "embeddingConfigured": false,
+  "fallbackMode": "local",
+  "embeddingModel": "text-embedding-3-small"
 }
 ```
 
@@ -129,6 +153,29 @@ Response:
 curl http://localhost:4000/api/memory/provider/status
 curl http://localhost:4000/api/memory/demo-shopease
 curl http://localhost:4000/api/memory/:projectId
+```
+
+Verify provider retain/recall/reflect:
+
+```bash
+curl -X POST http://localhost:4000/api/memory/provider/verify \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"demo-shopease"}'
+```
+
+Response:
+
+```json
+{
+  "provider": "local",
+  "bankId": "devcontext:demo-shopease",
+  "retainOk": true,
+  "recallOk": true,
+  "reflectOk": true,
+  "recalledCount": 1,
+  "fallbackUsed": false,
+  "error": null
+}
 ```
 
 Recall:
@@ -251,10 +298,51 @@ curl http://localhost:4000/api/tasks/:projectId
 curl http://localhost:4000/api/tasks/:projectId/:taskId
 ```
 
+## System Status
+
+```bash
+curl http://localhost:4000/api/system/status
+```
+
+Response:
+
+```json
+{
+  "backend": "ok",
+  "memory": {
+    "provider": "local",
+    "configuredProvider": "local",
+    "hindsightConfigured": false,
+    "fallbackMode": "local"
+  },
+  "rag": {
+    "provider": "local",
+    "configuredProvider": "local",
+    "pgvectorConfigured": false,
+    "supabaseConfigured": false,
+    "embeddingConfigured": false,
+    "fallbackMode": "local"
+  },
+  "llm": {
+    "mockMode": true,
+    "openaiConfigured": false
+  },
+  "github": {
+    "tokenConfigured": false,
+    "mockWrite": true
+  },
+  "deployment": {
+    "nodeEnv": "development",
+    "timestamp": "2026-06-05T00:00:00.000Z"
+  }
+}
+```
+
 ## Persistence
 
 - Imported projects: `backend/.data/projects.json`
 - Imported RAG chunks: `backend/.data/rag-chunks.json`
+- Semantic RAG chunks: Supabase `code_chunks` table when `RAG_PROVIDER=pgvector`
 - Retained memories: `backend/.data/runtime-memories.json`
 - Generated tasks: `backend/.data/tasks.json`
 

@@ -17,7 +17,7 @@ export class AgentService {
   }
 
   async generateMemoryPowered(projectId: ProjectId, message: string): Promise<MemoryPoweredAnswer> {
-    const chunks = this.ragService.search(projectId, message);
+    const chunks = await this.ragService.search(projectId, message);
     const memories = await this.memoryService.recall(projectId, message);
     const answer = await this.llmService.generateMemoryAnswer(message, chunks, memories);
     answer.memoryProvider = this.memoryService.providerName;

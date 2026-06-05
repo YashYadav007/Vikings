@@ -1,6 +1,8 @@
 const baseUrl = process.env.BASE_URL ?? "http://localhost:4000";
 const hindsightConfigured = Boolean(process.env.HINDSIGHT_API_URL && process.env.HINDSIGHT_API_KEY);
 const memoryProvider = process.env.MEMORY_PROVIDER ?? "local";
+const ragProvider = process.env.RAG_PROVIDER ?? "local";
+const pgvectorConfigured = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.OPENAI_API_KEY);
 const testGitHubRepo = process.env.TEST_GITHUB_REPO;
 let importedProjectId: string | null = null;
 let executionTaskId: string | null = null;
@@ -81,6 +83,40 @@ const checks: SmokeCheck[] = [
     },
   },
   {
+    name: "GET /api/rag/provider/status",
+    run: async () => {
+      const result = await request("/api/rag/provider/status");
+      expect(result.activeProvider === "local" || result.activeProvider === "pgvector", "Expected active RAG provider");
+      expect(typeof result.supabaseConfigured === "boolean", "Expected supabaseConfigured");
+      expect(typeof result.embeddingConfigured === "boolean", "Expected embeddingConfigured");
+    },
+  },
+  {
+    name: "GET /api/system/status",
+    run: async () => {
+      const result = await request("/api/system/status");
+      expect(result.backend === "ok", "Expected backend ok");
+      expect(typeof result.memory === "object" && result.memory !== null, "Expected memory status");
+      expect(typeof result.rag === "object" && result.rag !== null, "Expected RAG status");
+      expect(typeof result.llm === "object" && result.llm !== null, "Expected LLM status");
+      expect(typeof result.github === "object" && result.github !== null, "Expected GitHub status");
+    },
+  },
+  {
+    name: "POST /api/memory/provider/verify",
+    run: async () => {
+      const result = await request("/api/memory/provider/verify", {
+        method: "POST",
+        body: JSON.stringify({ projectId: "demo-shopease" }),
+      });
+      expect(result.provider === "local" || result.provider === "hindsight", "Expected memory provider");
+      expect(result.retainOk === true, "Expected retainOk");
+      expect(result.recallOk === true, "Expected recallOk");
+      expect(result.reflectOk === true, "Expected reflectOk");
+      expect(typeof result.recalledCount === "number", "Expected recalledCount");
+    },
+  },
+  {
     name: "POST /api/chat/compare",
     run: async () => {
       const result = await request("/api/chat/compare", {
@@ -95,6 +131,13 @@ const checks: SmokeCheck[] = [
       expect(Array.isArray(result.patchPreview), "Expected patchPreview array");
       expect(Array.isArray(result.memoryToSave), "Expected memoryToSave array");
       expect(result.memoryProvider === "local" || result.memoryProvider === "hindsight", "Expected memoryProvider");
+      const memoriesUsed = result.memoriesUsed as unknown[];
+      if (Array.isArray(memoriesUsed) && memoriesUsed.length > 0) {
+        expect(
+          !(result.memoryAnswer as string).includes("No durable architecture memory was recalled yet"),
+          "Memory answer should not deny recalled memories",
+        );
+      }
     },
   },
   {
@@ -216,6 +259,8 @@ const checks: SmokeCheck[] = [
       });
       expect(result.provider === "local" || result.provider === "hindsight", "Expected reflection provider");
       expect(typeof result.reflection === "string", "Expected reflection string");
+      expect(result.reflection !== "I don't have information.", "Expected useful reflection fallback");
+      expect((result.reflection as string).length > 32, "Expected non-trivial reflection");
       expect(Array.isArray(result.suggestedMemories), "Expected suggestedMemories array");
     },
   },
@@ -264,10 +309,36 @@ const checks: SmokeCheck[] = [
         body: JSON.stringify({ repoUrl: testGitHubRepo }),
       });
       const project = result.project as { id?: string; chunkCount?: number };
-      const summary = result.importSummary as { chunksCreated?: number };
+      const summary = result.importSummary as { chunksCreated?: number; ragProvider?: string; semanticIndex?: boolean };
       expect(typeof project.id === "string", "Expected imported project id");
       expect((summary.chunksCreated ?? 0) > 0, "Expected imported chunks");
+      if (ragProvider === "pgvector" && pgvectorConfigured) {
+        expect(summary.ragProvider === "pgvector", "Expected pgvector import when configured");
+        expect(summary.semanticIndex === true, "Expected semantic index");
+      }
       importedProjectId = project.id;
+    },
+  },
+  {
+    name: "pgvector optional semantic import/search",
+    run: async () => {
+      if (ragProvider !== "pgvector" || !pgvectorConfigured) {
+        throw new SkipSmokeCheck("RAG_PROVIDER=pgvector with Supabase and OpenAI env vars is not configured.");
+      }
+      if (!testGitHubRepo || !importedProjectId) {
+        throw new SkipSmokeCheck("TEST_GITHUB_REPO is required for pgvector import smoke.");
+      }
+
+      const search = await request("/api/rag/search", {
+        method: "POST",
+        body: JSON.stringify({
+          projectId: importedProjectId,
+          query: "project architecture entry point",
+        }),
+      });
+      expect(search.provider === "pgvector", "Expected pgvector search provider");
+      expect(search.semanticSearch === true, "Expected semantic search metadata");
+      expect(Array.isArray(search.chunks), "Expected semantic chunks");
     },
   },
   {

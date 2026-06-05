@@ -95,6 +95,7 @@ export interface MemoryReflection {
   provider: "local" | "hindsight";
   reflection: string;
   suggestedMemories: MemoryDraft[];
+  fallbackReflectionUsed?: boolean;
 }
 
 export interface MemoryProviderStatus {

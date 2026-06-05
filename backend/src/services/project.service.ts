@@ -28,7 +28,7 @@ export class ProjectService {
       return {
         ...seedProject,
         memoryCount: await this.memoryService.count(projectId),
-        chunkCount: this.ragService.count(projectId),
+        chunkCount: await this.ragService.count(projectId),
       };
     }
 
@@ -40,7 +40,7 @@ export class ProjectService {
     return {
       ...project,
       memoryCount: await this.memoryService.count(projectId),
-      chunkCount: this.ragService.count(projectId),
+      chunkCount: await this.ragService.count(projectId),
     };
   }
 

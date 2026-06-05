@@ -25,23 +25,22 @@ curl http://localhost:4000/health
 
 ## Current Scope
 
-- Local mock RAG over seeded code chunks.
+- Provider-backed RAG: local keyword search by default, optional Supabase pgvector semantic search.
 - Public GitHub repository import into local Project Brain data.
 - Provider-backed memory layer with local JSON fallback.
-- Optional Hindsight HTTP memory provider.
+- Optional Hindsight HTTP memory provider with verification endpoint.
 - Local retained memories in `backend/.data/runtime-memories.json`.
 - Local generated task records in `backend/.data/tasks.json`.
 - Mock LLM mode that works without an OpenAI key.
 - Optional OpenAI mode when `USE_MOCK_LLM=false` and `OPENAI_API_KEY` is set.
 - React Flow-compatible graph data for the Project Brain.
-- Stable Sprint 1 frontend API contracts.
+- Safe agent execution and mock/real GitHub apply workflow.
+- Stable frontend API contracts.
 
 ## Not In This Sprint
 
-- Supabase or pgvector.
 - Database persistence.
 - Private GitHub repository import.
-- GitHub PR creation.
 - Frontend UI.
 
 ## Memory Provider
@@ -68,7 +67,28 @@ Each project gets one bank ID: `{HINDSIGHT_PROJECT_PREFIX}:{projectId}`. Example
 
 If Hindsight credentials are missing or a Hindsight request fails, the backend falls back to the local JSON provider.
 
-RAG remains local keyword search. pgvector, private repo import, and PR creation are still future work.
+## RAG Provider
+
+Default local mode:
+
+```env
+RAG_PROVIDER=local
+RAG_FALLBACK_MODE=local
+```
+
+Semantic mode:
+
+```env
+RAG_PROVIDER=pgvector
+RAG_FALLBACK_MODE=local
+SUPABASE_URL=your-url
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_DB_SCHEMA=public
+OPENAI_API_KEY=your-openai-key
+EMBEDDING_MODEL=text-embedding-3-small
+```
+
+Run `backend/db/migrations/001_pgvector_rag.sql` in the Supabase SQL editor before enabling pgvector. If Supabase or embeddings are missing, the backend falls back to local keyword RAG.
 
 ## Import A Public GitHub Repo
 
@@ -92,6 +112,8 @@ Use the returned `project.id` with existing APIs:
 - `GET /api/projects/:projectId/graph`
 - `GET /api/projects/:projectId/memory`
 - `GET /api/rag/:projectId/chunks`
+- `GET /api/rag/provider/status`
+- `GET /api/system/status`
 
 ## Generated Files
 

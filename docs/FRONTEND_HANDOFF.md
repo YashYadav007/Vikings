@@ -27,6 +27,8 @@ Render `genericAnswer` beside `memoryAnswer`. Show `chunksUsed`, `memoriesUsed`,
 
 Sprint 3 adds optional `memoryProvider` to this response. Frontend can show it as a small badge (`local` or `hindsight`) without changing the existing compare panel.
 
+Sprint 6 ensures mock memory answers explicitly cite recalled memories when `memoriesUsed` is non-empty.
+
 Sprint 5 adds optional execution hints:
 
 ```json
@@ -124,6 +126,14 @@ GET /api/memory/provider/status
 
 Use this for a demo/debug badge showing active provider and whether Hindsight is configured.
 
+Live verification:
+
+```http
+POST /api/memory/provider/verify
+```
+
+Use this in a demo/debug panel to prove retain, recall, and reflect are working for the active provider.
+
 ## Generated Tasks
 
 Use:
@@ -166,6 +176,24 @@ GET /api/rag/:projectId/chunks
 
 This shows the indexed local chunks for a project.
 
+RAG provider status:
+
+```http
+GET /api/rag/provider/status
+```
+
+Search response now keeps `chunks` and may also include `provider` plus `semanticSearch`. Frontend can ignore these fields or show a small `local`/`pgvector` badge.
+
+## System Status
+
+Use:
+
+```http
+GET /api/system/status
+```
+
+This is a read-only hosting/demo health endpoint. It reports backend, memory, RAG, LLM, GitHub, and deployment status without exposing secrets.
+
 ## Demo Cleanup
 
 For local hackathon demos:
@@ -185,7 +213,8 @@ DELETE /api/projects/:projectId
 - Retained memories persist locally in `backend/.data/runtime-memories.json`.
 - Hindsight provider can be enabled with env vars. Each project maps to one bank ID, e.g. `devcontext:demo-shopease`.
 - If Hindsight is not configured or a call fails, backend falls back to local memory.
-- Public GitHub import is available; pgvector is still future work.
+- Public GitHub import is available; pgvector semantic RAG is available when Supabase and OpenAI embedding env vars are configured.
+- Local keyword RAG remains the fallback when semantic RAG is not configured.
 - GitHub PR creation is available behind the approved apply endpoint when `MOCK_GITHUB_WRITE=false` and `GITHUB_TOKEN` has write access.
 - Imports are limited to the top 40 useful files for the MVP.
 - Duplicate memories are skipped, and graph output groups duplicate-looking nodes.

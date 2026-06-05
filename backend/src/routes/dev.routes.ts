@@ -17,7 +17,7 @@ export function createDevRouter(
 ): Router {
   const router = Router();
 
-  router.post("/reset", (req, res, next) => {
+  router.post("/reset", async (req, res, next) => {
     try {
       if (process.env.NODE_ENV === "production") {
         res.status(403).json({ error: "Dev reset is disabled in production." });
@@ -31,7 +31,7 @@ export function createDevRouter(
           success: true,
           cleared: {
             project: body.projectId === "demo-shopease" ? false : projectService.deleteImportedProject(body.projectId),
-            chunks: ragService.clearProjectChunksWithCount(body.projectId),
+            chunks: await ragService.clearProjectChunksWithCount(body.projectId),
             memories: memoryService.clearProject(body.projectId),
             tasks: taskService.clearProject(body.projectId),
           },
@@ -43,7 +43,7 @@ export function createDevRouter(
         success: true,
         cleared: {
           projects: projectService.clearImportedProjects(),
-          chunks: ragService.clearAllImportedChunks(),
+          chunks: await ragService.clearAllImportedChunks(),
           memories: memoryService.clearAllRuntime(),
           tasks: taskService.clearAll(),
         },

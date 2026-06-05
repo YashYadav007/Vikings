@@ -18,7 +18,7 @@ export class AgentExecutionService {
 
   async createExecutionPlan(projectId: ProjectId, message: string) {
     await this.projectService.getProject(projectId);
-    const chunksUsed = this.ragService.search(projectId, message);
+    const chunksUsed = await this.ragService.search(projectId, message);
     const memoriesUsed = await this.memoryService.recall(projectId, message);
     const taskType = this.classifyTask(message);
     const plan = this.buildPlan(message, chunksUsed.map((chunk) => chunk.filePath), memoriesUsed.map((memory) => memory.title));

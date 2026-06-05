@@ -16,10 +16,12 @@ Sprint 4 adds public GitHub repository import. DevContext OS can now fetch a pub
 
 Sprint 5 adds safe autonomous execution. The agent can generate a plan and patch preview from RAG + memory, then waits for explicit approval before applying changes to a new GitHub branch and opening a PR. Local demos use mock GitHub writes by default.
 
+Sprint 6 upgrades RAG from prototype keyword search to a provider-backed layer. Local keyword RAG remains the default, while `RAG_PROVIDER=pgvector` enables Supabase Postgres + pgvector semantic search with OpenAI embeddings. Hindsight verification and reflect behavior are hardened for hosted demos.
+
 Still mocked or local:
 
-- RAG is local keyword search.
+- RAG defaults to local keyword search unless Supabase pgvector and OpenAI embeddings are configured.
 - GitHub import is public-repo only and capped at the top 40 useful files.
-- pgvector is not implemented.
+- pgvector is implemented but optional; local fallback keeps the backend usable without keys.
 - Real PR creation requires `MOCK_GITHUB_WRITE=false`, `GITHUB_TOKEN`, and write access.
 - Local JSON remains the fallback and audit cache for memory and generated tasks.

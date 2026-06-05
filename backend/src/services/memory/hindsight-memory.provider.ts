@@ -146,13 +146,25 @@ export class HindsightMemoryProvider implements MemoryProvider {
   }
 
   async reflect(projectId: ProjectId, query: string, context?: unknown): Promise<MemoryReflection> {
+    const recalledMemories = await this.recall(projectId, query, 5);
+    const fallbackReflection = this.structuredReflection(projectId, query, context, recalledMemories);
+
     try {
       await this.ensureBank(projectId);
       const response = await this.request(`/v1/default/banks/${encodeURIComponent(this.getBankId(projectId))}/reflect`, {
         method: "POST",
         body: JSON.stringify({
           query,
-          context: typeof context === "string" ? context : JSON.stringify(context ?? {}),
+          context: JSON.stringify({
+            query,
+            userContext: context ?? {},
+            recalledMemories: recalledMemories.map((memory) => ({
+              type: memory.type,
+              title: memory.title,
+              content: memory.content,
+              relatedFiles: memory.relatedFiles,
+            })),
+          }),
           budget: "low",
         }),
       });
@@ -163,14 +175,27 @@ export class HindsightMemoryProvider implements MemoryProvider {
         this.asString(responseRecord.reflection) ??
         "Hindsight returned a reflection without text.";
 
+      if (this.isWeakReflection(reflection)) {
+        return {
+          provider: "hindsight",
+          ...fallbackReflection,
+          fallbackReflectionUsed: true,
+        };
+      }
+
       return {
         provider: "hindsight",
         reflection,
-        suggestedMemories: this.localSuggestedMemories(context),
+        suggestedMemories: fallbackReflection.suggestedMemories,
+        fallbackReflectionUsed: false,
       };
     } catch (error) {
       this.warnAndFallback("reflect", error);
-      return this.config.fallbackProvider.reflect(projectId, query, context);
+      return {
+        provider: "hindsight",
+        ...fallbackReflection,
+        fallbackReflectionUsed: true,
+      };
     }
   }
 
@@ -292,8 +317,60 @@ export class HindsightMemoryProvider implements MemoryProvider {
     ];
   }
 
+  private structuredReflection(
+    _projectId: ProjectId,
+    query: string,
+    context: unknown,
+    memories: ScoredMemory[],
+  ): Omit<MemoryReflection, "provider"> {
+    const topMemory = memories[0];
+    const files = [
+      ...new Set([
+        ...memories.flatMap((memory) => memory.relatedFiles),
+        ...this.filesFromContext(context),
+      ]),
+    ];
+
+    if (!topMemory) {
+      return {
+        reflection: `No durable memory matched "${query}" yet. Capture the task outcome, files touched, risks, and implementation decisions after the work is complete.`,
+        suggestedMemories: this.localSuggestedMemories(context),
+      };
+    }
+
+    return {
+      reflection: `The project has a durable ${topMemory.type} memory "${topMemory.title}": ${topMemory.content} Future work for "${query}" should preserve this lesson and check related files ${files.join(", ") || "not specified"}.`,
+      suggestedMemories: [
+        {
+          type: topMemory.type === "risk" ? "risk" : "decision",
+          title: `Preserve ${topMemory.title}`,
+          content: `Future work should preserve this remembered context: ${topMemory.content}`,
+          relatedFiles: files,
+        },
+      ],
+    };
+  }
+
+  private filesFromContext(context: unknown): string[] {
+    const record = typeof context === "object" && context !== null ? (context as Record<string, unknown>) : {};
+    return Array.isArray(record.filesTouched) ? record.filesTouched.filter((file): file is string => typeof file === "string") : [];
+  }
+
+  private isWeakReflection(reflection: string): boolean {
+    const normalized = reflection.toLowerCase().trim();
+    return normalized.length < 32 || normalized === "i don't have information." || normalized === "i do not have information.";
+  }
+
   private normalizeType(type?: string): Memory["type"] {
-    if (type === "bug" || type === "decision" || type === "style" || type === "risk" || type === "preference" || type === "task") {
+    if (
+      type === "bug" ||
+      type === "decision" ||
+      type === "style" ||
+      type === "risk" ||
+      type === "preference" ||
+      type === "task" ||
+      type === "architecture"
+    ) {
       return type;
     }
     if (type === "experience") {
