@@ -6,7 +6,7 @@ Base URL:
 http://localhost:4000
 ```
 
-Existing Sprint 1-3 response shapes remain compatible. Sprint 4 adds public GitHub import and local RAG chunk debug APIs.
+Existing Sprint 1-4 response shapes remain compatible. Sprint 5 adds safe agent execution and approved patch apply APIs.
 
 ## Health And Projects
 
@@ -68,10 +68,13 @@ Response:
     "filesIndexed": 1,
     "chunksCreated": 1,
     "memoryRetained": true,
+    "projectReused": false,
     "warnings": []
   }
 }
 ```
+
+Re-importing the same repo reuses the same project ID, refreshes metadata/chunks, and skips duplicate architecture memory. On the second import `importSummary.projectReused` is `true`; `memoryRetained` is `false` if the equivalent architecture memory already exists.
 
 ## RAG
 
@@ -178,13 +181,74 @@ curl -X POST http://localhost:4000/api/chat/compare \
   -d '{"projectId":"github-octocat-hello-world","message":"Summarize the project architecture"}'
 ```
 
-Compare response keeps old fields and includes optional `memoryProvider`.
+Compare response keeps old fields and includes optional `memoryProvider`, `canExecute`, and `executeEndpoint`.
+
+## Agent Execution
+
+Generate plan and patch preview only. This endpoint does not write to GitHub.
+
+```bash
+curl -X POST http://localhost:4000/api/agent/execute \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"demo-shopease","message":"Add coupon discount support"}'
+```
+
+Response:
+
+```json
+{
+  "task": {
+    "id": "task-id",
+    "status": "patch_generated"
+  },
+  "plan": "...",
+  "chunksUsed": [],
+  "memoriesUsed": [],
+  "patchPreview": [],
+  "testsToRun": [],
+  "risks": [],
+  "requiresApproval": true
+}
+```
+
+Apply after explicit approval:
+
+```bash
+curl -X POST http://localhost:4000/api/patches/task-id/apply \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"demo-shopease","approve":true}'
+```
+
+Success:
+
+```json
+{
+  "success": true,
+  "task": {},
+  "branchName": "devcontext/add-coupon-discount-support-12345678",
+  "commitSha": "mock-commit",
+  "prUrl": "https://github.com/mock/repo/pull/devcontext-mock",
+  "memoryRetained": true
+}
+```
+
+Safe failure:
+
+```json
+{
+  "success": false,
+  "reason": "GITHUB_TOKEN missing or repo not writable",
+  "patchPreview": [],
+  "task": {}
+}
+```
 
 ## Tasks
 
 ```bash
 curl http://localhost:4000/api/tasks/demo-shopease
 curl http://localhost:4000/api/tasks/:projectId
+curl http://localhost:4000/api/tasks/:projectId/:taskId
 ```
 
 ## Persistence
@@ -195,3 +259,69 @@ curl http://localhost:4000/api/tasks/:projectId
 - Generated tasks: `backend/.data/tasks.json`
 
 These are local MVP stores, not a database.
+
+## Delete Imported Project
+
+```bash
+curl -X DELETE http://localhost:4000/api/projects/github-octocat-hello-world
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "deleted": {
+    "project": true,
+    "chunks": 1,
+    "memories": 1,
+    "tasks": 2
+  }
+}
+```
+
+Seed project protection:
+
+```bash
+curl -X DELETE http://localhost:4000/api/projects/demo-shopease
+```
+
+Returns `400`.
+
+## Dev Reset
+
+Enabled when `NODE_ENV !== "production"`.
+
+Reset one project:
+
+```bash
+curl -X POST http://localhost:4000/api/dev/reset \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"github-octocat-hello-world"}'
+```
+
+Reset all imported/runtime local data:
+
+```bash
+curl -X POST http://localhost:4000/api/dev/reset \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "cleared": {}
+}
+```
+
+## Graph Deduplication
+
+Graph output remains React Flow-compatible and now dedupes/groups:
+
+- Module nodes by module ID/name.
+- File nodes by path.
+- Memory nodes by visible memory identity, with `data.count`.
+- Repeated task labels, e.g. `Summarize the project architecture × 2`.

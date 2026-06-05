@@ -32,4 +32,14 @@ export class LocalMemoryService {
   async count(projectId: ProjectId): Promise<number> {
     return (await this.list(projectId)).length;
   }
+
+  clearProject(projectId: ProjectId): number {
+    const provider = this.provider as unknown as { clearProject?: (projectId: ProjectId) => number };
+    return provider.clearProject?.(projectId) ?? 0;
+  }
+
+  clearAllRuntime(): number {
+    const provider = this.provider as unknown as { clearAllRuntime?: () => number };
+    return provider.clearAllRuntime?.() ?? 0;
+  }
 }

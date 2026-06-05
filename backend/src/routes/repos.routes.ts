@@ -49,6 +49,7 @@ export function createReposRouter(
       });
 
       const projectId = projectService.createProjectId(owner, repo);
+      const projectReused = projectService.importedProjectExists(projectId);
       const chunks = chunkingService.chunkFiles(projectId, files);
       const analysis = repoAnalyzerService.analyze(metadata, files, chunks);
       const now = new Date().toISOString();
@@ -77,13 +78,13 @@ export function createReposRouter(
 
       let memoryRetained = false;
       try {
-        await memoryService.retain(projectId, {
+        const retainedMemory = await memoryService.retain(projectId, {
           type: "architecture",
           title: "Initial repo architecture",
           content: `${analysis.architecture}\nImportant files: ${analysis.importantFiles.join(", ") || "none"}.`,
           relatedFiles: analysis.importantFiles,
         });
-        memoryRetained = true;
+        memoryRetained = !(retainedMemory as { duplicate?: boolean }).duplicate;
       } catch (error) {
         warnings.push(`Initial architecture memory was not retained: ${error instanceof Error ? error.message : "unknown error"}`);
       }
@@ -96,6 +97,7 @@ export function createReposRouter(
           filesIndexed: files.length,
           chunksCreated: chunks.length,
           memoryRetained,
+          projectReused,
           warnings,
         },
       });

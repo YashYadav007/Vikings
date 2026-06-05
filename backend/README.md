@@ -26,6 +26,7 @@ PORT=4000
 LLM_PROVIDER=openai
 USE_MOCK_LLM=true
 GITHUB_TOKEN=
+MOCK_GITHUB_WRITE=true
 TEST_GITHUB_REPO=
 MEMORY_PROVIDER=local
 HINDSIGHT_API_URL=
@@ -37,6 +38,8 @@ HINDSIGHT_FALLBACK_MODE=local
 `USE_MOCK_LLM=true` runs fully offline without an OpenAI key. Set `USE_MOCK_LLM=false` and provide `OPENAI_API_KEY` to use OpenAI.
 
 `GITHUB_TOKEN` is optional. Public repo import works without it, but unauthenticated GitHub requests have lower rate limits.
+
+`MOCK_GITHUB_WRITE=true` is the local demo default. Patch apply simulates branch, commit, and PR data without writing to GitHub. Set `MOCK_GITHUB_WRITE=false` and provide `GITHUB_TOKEN` to attempt real branch/file/PR writes.
 
 `TEST_GITHUB_REPO` is optional and only used by `npm run smoke` to run import checks.
 
@@ -139,6 +142,8 @@ Supported URLs:
 Import behavior:
 
 - Fetches repo metadata, default branch, recursive tree, and selected file contents.
+- Re-importing the same repo reuses the same project ID and replaces indexed chunks.
+- Duplicate `Initial repo architecture` memories are skipped.
 - Ignores generated, binary, media, lockfile, and large files.
 - Imports at most 40 useful files for the MVP.
 - Chunks files into line-based chunks of up to 80 lines with 10-line overlap.
@@ -151,3 +156,65 @@ Run optional import smoke:
 ```bash
 TEST_GITHUB_REPO=https://github.com/octocat/Hello-World npm run smoke
 ```
+
+## Demo Cleanup
+
+Reset one imported project:
+
+```bash
+curl -X POST http://localhost:4000/api/dev/reset \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"github-octocat-hello-world"}'
+```
+
+Reset all local imported/demo runtime data while keeping seed code data:
+
+```bash
+curl -X POST http://localhost:4000/api/dev/reset \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+```
+
+Delete one imported project:
+
+```bash
+curl -X DELETE http://localhost:4000/api/projects/github-octocat-hello-world
+```
+
+`demo-shopease` is protected and cannot be deleted.
+
+## Graph Cleanup
+
+Graph output is deduped for demo readability:
+
+- Memory nodes are grouped by visible identity, with `data.count`.
+- Repeated task labels are grouped, e.g. `Summarize the project architecture × 2`.
+- File and module nodes are deduped.
+
+## Agent Execution
+
+Sprint 5 adds a safe two-step autonomous workflow.
+
+Generate a plan and patch preview only:
+
+```bash
+curl -X POST http://localhost:4000/api/agent/execute \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"demo-shopease","message":"Add coupon discount support"}'
+```
+
+Apply only after explicit approval:
+
+```bash
+curl -X POST http://localhost:4000/api/patches/task-id/apply \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"demo-shopease","approve":true}'
+```
+
+Safety rules:
+
+- `/api/agent/execute` never modifies GitHub.
+- `/api/patches/:taskId/apply` requires `approve=true`.
+- Writes never target main/master directly; a `devcontext/...` branch is created.
+- Missing token or write access returns a safe failure with patch preview.
+- Successful apply retains task outcome memory and updates the task graph.

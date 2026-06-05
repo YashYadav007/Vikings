@@ -38,6 +38,19 @@ export class LocalRagService {
     this.writeImportedChunks(this.readImportedChunks().filter((chunk) => chunk.projectId !== projectId));
   }
 
+  clearProjectChunksWithCount(projectId: ProjectId): number {
+    const before = this.readImportedChunks();
+    const after = before.filter((chunk) => chunk.projectId !== projectId);
+    this.writeImportedChunks(after);
+    return before.length - after.length;
+  }
+
+  clearAllImportedChunks(): number {
+    const before = this.readImportedChunks();
+    this.writeImportedChunks([]);
+    return before.length;
+  }
+
   count(projectId: ProjectId): number {
     return this.listChunks(projectId).length;
   }

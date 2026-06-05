@@ -39,6 +39,8 @@ export class AgentService {
       patchPreview: memoryAnswer.patchPreview,
       memoryToSave: memoryAnswer.memoryToSave,
       memoryProvider: this.memoryService.providerName,
+      canExecute: true,
+      executeEndpoint: "/api/agent/execute",
     };
   }
 }

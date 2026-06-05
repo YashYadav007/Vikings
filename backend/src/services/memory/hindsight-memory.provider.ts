@@ -47,6 +47,11 @@ export class HindsightMemoryProvider implements MemoryProvider {
   }
 
   async retain(projectId: ProjectId, draft: MemoryDraft): Promise<Memory> {
+    const existing = (await this.config.fallbackProvider.list(projectId)).find((memory) => this.isEquivalentMemory(memory, draft));
+    if (existing) {
+      return { ...existing, duplicate: true } as Memory;
+    }
+
     const createdAt = new Date().toISOString();
     const normalized: Memory = {
       ...draft,
@@ -316,5 +321,14 @@ export class HindsightMemoryProvider implements MemoryProvider {
   private warnAndFallback(operation: string, error: unknown): void {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`Hindsight ${operation} failed; falling back to local memory provider. ${message}`);
+  }
+
+  private isEquivalentMemory(memory: Memory, draft: MemoryDraft): boolean {
+    return `${memory.type}|${this.normalize(memory.title)}|${this.normalize(memory.content)}` ===
+      `${draft.type}|${this.normalize(draft.title)}|${this.normalize(draft.content)}`;
+  }
+
+  private normalize(value: string): string {
+    return value.toLowerCase().replace(/\s+/g, " ").trim();
   }
 }

@@ -24,9 +24,15 @@ export class TaskService {
       message,
       taskType: answer.taskType,
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       chunksUsedCount: answer.chunksUsed.length,
       memoriesUsedCount: answer.rawMemoriesUsed.length,
-      patchPreview: answer.patchPreview,
+      patchPreview: answer.patchPreview.map((patch) => ({
+        ...patch,
+        originalContentSnippet: "",
+        newContent: "",
+        risk: "Review generated patch before applying.",
+      })),
       status: "generated",
     };
 
@@ -35,6 +41,52 @@ export class TaskService {
     this.writeTasks(tasks);
 
     return task;
+  }
+
+  createTask(task: Omit<GeneratedTask, "id" | "createdAt" | "updatedAt">): GeneratedTask {
+    const now = new Date().toISOString();
+    const nextTask: GeneratedTask = {
+      ...task,
+      id: `task-${randomUUID()}`,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const tasks = this.readTasks();
+    tasks.push(nextTask);
+    this.writeTasks(tasks);
+    return nextTask;
+  }
+
+  getTask(projectId: ProjectId, taskId: string): GeneratedTask | null {
+    return this.readTasks().find((task) => task.projectId === projectId && task.id === taskId) ?? null;
+  }
+
+  updateTask(projectId: ProjectId, taskId: string, patch: Partial<GeneratedTask>): GeneratedTask | null {
+    const tasks = this.readTasks();
+    const index = tasks.findIndex((task) => task.projectId === projectId && task.id === taskId);
+    if (index === -1) return null;
+
+    const updatedTask = {
+      ...tasks[index],
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
+    tasks[index] = updatedTask;
+    this.writeTasks(tasks);
+    return updatedTask;
+  }
+
+  clearProject(projectId: ProjectId): number {
+    const before = this.readTasks();
+    const after = before.filter((task) => task.projectId !== projectId);
+    this.writeTasks(after);
+    return before.length - after.length;
+  }
+
+  clearAll(): number {
+    const before = this.readTasks();
+    this.writeTasks([]);
+    return before.length;
   }
 
   private ensureStorageFile(): void {

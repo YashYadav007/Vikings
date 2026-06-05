@@ -45,12 +45,13 @@ export class ProjectService {
   }
 
   saveImportedProject(project: ImportedProject): ImportedProject {
+    const existingProject = this.readImportedProjects().find((candidate) => candidate.id === project.id);
     const projects = this.readImportedProjects().filter((candidate) => candidate.id !== project.id);
     const now = new Date().toISOString();
     const nextProject = {
       ...project,
       updatedAt: now,
-      createdAt: project.createdAt || now,
+      createdAt: existingProject?.createdAt || project.createdAt || now,
     };
 
     projects.push(nextProject);
@@ -60,6 +61,23 @@ export class ProjectService {
 
   createProjectId(owner: string, repoName: string): string {
     return `github-${owner}-${repoName}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
+  }
+
+  importedProjectExists(projectId: ProjectId): boolean {
+    return this.readImportedProjects().some((project) => project.id === projectId);
+  }
+
+  deleteImportedProject(projectId: ProjectId): boolean {
+    const projects = this.readImportedProjects();
+    const nextProjects = projects.filter((project) => project.id !== projectId);
+    this.writeImportedProjects(nextProjects);
+    return projects.length !== nextProjects.length;
+  }
+
+  clearImportedProjects(): number {
+    const projects = this.readImportedProjects();
+    this.writeImportedProjects([]);
+    return projects.length;
   }
 
   private ensureStorageFile(): void {

@@ -30,6 +30,33 @@ export function createProjectsRouter(
     }
   });
 
+  router.delete("/:projectId", (req, res, next) => {
+    try {
+      const { projectId } = req.params;
+      if (projectId === "demo-shopease") {
+        res.status(400).json({ error: "Seed demo project cannot be deleted." });
+        return;
+      }
+
+      const projectDeleted = projectService.deleteImportedProject(projectId);
+      const chunksCleared = ragService.clearProjectChunksWithCount(projectId);
+      const memoriesCleared = memoryService.clearProject(projectId);
+      const tasksCleared = taskService.clearProject(projectId);
+
+      res.json({
+        success: true,
+        deleted: {
+          project: projectDeleted,
+          chunks: chunksCleared,
+          memories: memoriesCleared,
+          tasks: tasksCleared,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get("/:projectId/memory", async (req, res, next) => {
     try {
       await projectService.getProject(req.params.projectId);

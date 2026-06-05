@@ -3,6 +3,7 @@ const hindsightConfigured = Boolean(process.env.HINDSIGHT_API_URL && process.env
 const memoryProvider = process.env.MEMORY_PROVIDER ?? "local";
 const testGitHubRepo = process.env.TEST_GITHUB_REPO;
 let importedProjectId: string | null = null;
+let executionTaskId: string | null = null;
 
 class SkipSmokeCheck extends Error {
   constructor(message: string) {
@@ -94,6 +95,69 @@ const checks: SmokeCheck[] = [
       expect(Array.isArray(result.patchPreview), "Expected patchPreview array");
       expect(Array.isArray(result.memoryToSave), "Expected memoryToSave array");
       expect(result.memoryProvider === "local" || result.memoryProvider === "hindsight", "Expected memoryProvider");
+    },
+  },
+  {
+    name: "POST /api/agent/execute",
+    run: async () => {
+      const result = await request("/api/agent/execute", {
+        method: "POST",
+        body: JSON.stringify({
+          projectId: "demo-shopease",
+          message: "Add coupon discount support",
+        }),
+      });
+      const task = result.task as { id?: string; status?: string };
+      expect(task.status === "patch_generated", "Expected patch_generated task");
+      expect(typeof result.plan === "string", "Expected plan");
+      expect(Array.isArray(result.patchPreview), "Expected patch preview");
+      expect(result.requiresApproval === true, "Expected approval requirement");
+      executionTaskId = task.id ?? null;
+    },
+  },
+  {
+    name: "POST /api/patches/:taskId/apply",
+    run: async () => {
+      if (!executionTaskId) throw new SkipSmokeCheck("No execution task id.");
+      const rejected = await fetch(`${baseUrl}/api/patches/${executionTaskId}/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: "demo-shopease",
+          approve: false,
+        }),
+      });
+      expect(rejected.status === 400, "Expected approve=false to be rejected");
+
+      const result = await request(`/api/patches/${executionTaskId}/apply`, {
+        method: "POST",
+        body: JSON.stringify({
+          projectId: "demo-shopease",
+          approve: true,
+        }),
+      });
+      expect(result.success === true, "Expected mock apply success");
+      expect(typeof result.branchName === "string", "Expected branchName");
+      expect(typeof result.commitSha === "string", "Expected commitSha");
+      expect(typeof result.prUrl === "string", "Expected prUrl");
+    },
+  },
+  {
+    name: "GET /api/tasks/:projectId/:taskId",
+    run: async () => {
+      if (!executionTaskId) throw new SkipSmokeCheck("No execution task id.");
+      const result = await request(`/api/tasks/demo-shopease/${executionTaskId}`);
+      const task = result.task as { id?: string; prUrl?: string };
+      expect(task.id === executionTaskId, "Expected task details");
+      expect(typeof task.prUrl === "string", "Expected task PR URL after apply");
+    },
+  },
+  {
+    name: "Graph includes applied task PR node",
+    run: async () => {
+      const result = await request("/api/projects/demo-shopease/graph");
+      const nodes = result.nodes as Array<{ type?: string }>;
+      expect(nodes.some((node) => node.type === "pr"), "Expected PR node in graph");
     },
   },
   {
@@ -204,6 +268,39 @@ const checks: SmokeCheck[] = [
       expect(typeof project.id === "string", "Expected imported project id");
       expect((summary.chunksCreated ?? 0) > 0, "Expected imported chunks");
       importedProjectId = project.id;
+    },
+  },
+  {
+    name: "GitHub import idempotency",
+    run: async () => {
+      if (!testGitHubRepo || !importedProjectId) {
+        throw new SkipSmokeCheck("No imported project from TEST_GITHUB_REPO.");
+      }
+
+      const beforeMemory = await request(`/api/memory/${importedProjectId}`);
+      const beforeArchitectureCount = ((beforeMemory.memories as Array<{ type?: string; title?: string }>) ?? []).filter(
+        (memory) => memory.type === "architecture" && memory.title === "Initial repo architecture",
+      ).length;
+
+      const secondImport = await request("/api/repos/import", {
+        method: "POST",
+        body: JSON.stringify({ repoUrl: testGitHubRepo }),
+      });
+      const summary = secondImport.importSummary as { projectReused?: boolean; memoryRetained?: boolean };
+      expect(summary.projectReused === true, "Expected second import to reuse project");
+      expect(summary.memoryRetained === false, "Expected duplicate architecture memory to be skipped");
+
+      const afterMemory = await request(`/api/memory/${importedProjectId}`);
+      const afterArchitectureCount = ((afterMemory.memories as Array<{ type?: string; title?: string }>) ?? []).filter(
+        (memory) => memory.type === "architecture" && memory.title === "Initial repo architecture",
+      ).length;
+      expect(afterArchitectureCount === beforeArchitectureCount, "Expected architecture memory count to remain stable");
+
+      const graph = await request(`/api/projects/${importedProjectId}/graph`);
+      const architectureNodes = ((graph.nodes as Array<{ type?: string; data?: { label?: string } }>) ?? []).filter(
+        (node) => node.type === "memory" && node.data?.label?.startsWith("Architecture: Initial repo architecture"),
+      );
+      expect(architectureNodes.length <= 1, "Expected graph to dedupe architecture memory nodes");
     },
   },
   {

@@ -1,14 +1,27 @@
-# Frontend Handoff Stub
+# DevContext OS Frontend
 
-Frontend is intentionally not implemented in this sprint.
+Next.js 15 frontend for the DevContext OS Project Brain workspace.
 
-Use the backend at `http://localhost:4000`.
+## Run
 
-Primary endpoints:
+```bash
+npm install
+npm run dev
+```
 
-- Compare panel: `POST /api/chat/compare`
-- Project brain summary: `GET /api/projects/demo-shopease`
-- Memory timeline: `GET /api/projects/demo-shopease/memory`
-- Project graph: `GET /api/projects/demo-shopease/graph`
+The app expects the backend at:
 
-See `../docs/API_CONTRACT.md` and `../docs/FRONTEND_HANDOFF.md`.
+```text
+NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
+```
+
+Routes implemented:
+
+- `/`
+- `/dashboard`
+- `/import`
+- `/projects/[projectId]`
+- `/projects/[projectId]/chat`
+- `/projects/[projectId]/graph`
+- `/projects/[projectId]/memory`
+- `/projects/[projectId]/chunks`

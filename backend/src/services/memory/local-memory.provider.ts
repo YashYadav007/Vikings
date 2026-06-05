@@ -16,7 +16,7 @@ export class LocalMemoryProvider implements MemoryProvider {
   }
 
   async list(projectId: ProjectId): Promise<Memory[]> {
-    return [...seedMemories, ...this.readRuntimeMemories()]
+    return this.dedupeMemories([...seedMemories, ...this.readRuntimeMemories()])
       .filter((memory) => memory.projectId === projectId)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
@@ -40,6 +40,11 @@ export class LocalMemoryProvider implements MemoryProvider {
   }
 
   async retain(projectId: ProjectId, draft: MemoryDraft): Promise<Memory> {
+    const existing = (await this.list(projectId)).find((memory) => this.isEquivalentMemory(memory, draft));
+    if (existing) {
+      return { ...existing, duplicate: true } as Memory;
+    }
+
     const memory: Memory = {
       ...draft,
       id: `memory-${randomUUID()}`,
@@ -47,11 +52,24 @@ export class LocalMemoryProvider implements MemoryProvider {
       createdAt: new Date().toISOString(),
     };
 
-    const runtimeMemories = this.readRuntimeMemories();
+    const runtimeMemories = this.dedupeMemories(this.readRuntimeMemories());
     runtimeMemories.push(memory);
     this.writeRuntimeMemories(runtimeMemories);
 
     return memory;
+  }
+
+  clearProject(projectId: ProjectId): number {
+    const before = this.readRuntimeMemories();
+    const after = before.filter((memory) => memory.projectId !== projectId);
+    this.writeRuntimeMemories(after);
+    return before.length - after.length;
+  }
+
+  clearAllRuntime(): number {
+    const before = this.readRuntimeMemories();
+    this.writeRuntimeMemories([]);
+    return before.length;
   }
 
   async reflect(projectId: ProjectId, query: string, context?: unknown): Promise<MemoryReflection> {
@@ -92,7 +110,7 @@ export class LocalMemoryProvider implements MemoryProvider {
 
   private writeRuntimeMemories(memories: Memory[]): void {
     this.ensureStorageFile();
-    writeFileSync(this.storagePath, `${JSON.stringify(memories, null, 2)}\n`, "utf8");
+    writeFileSync(this.storagePath, `${JSON.stringify(this.dedupeMemories(memories), null, 2)}\n`, "utf8");
   }
 
   private buildSuggestedMemories(context: unknown): MemoryDraft[] {
@@ -110,5 +128,31 @@ export class LocalMemoryProvider implements MemoryProvider {
         relatedFiles: filesTouched,
       },
     ];
+  }
+
+  private dedupeMemories(memories: Memory[]): Memory[] {
+    const seen = new Set<string>();
+    const deduped: Memory[] = [];
+
+    for (const memory of memories) {
+      const key = this.memoryKey(memory);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(memory);
+    }
+
+    return deduped;
+  }
+
+  private isEquivalentMemory(memory: Memory, draft: MemoryDraft): boolean {
+    return this.memoryKey(memory) === this.memoryKey(draft);
+  }
+
+  private memoryKey(memory: Pick<Memory, "type" | "title" | "content">): string {
+    return `${memory.type}|${this.normalize(memory.title)}|${this.normalize(memory.content)}`;
+  }
+
+  private normalize(value: string): string {
+    return value.toLowerCase().replace(/\s+/g, " ").trim();
   }
 }

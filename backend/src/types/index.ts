@@ -77,11 +77,18 @@ export interface PatchPreview {
   diff: string;
 }
 
+export interface ExecutablePatch extends PatchPreview {
+  originalContentSnippet: string;
+  newContent: string;
+  risk: string;
+}
+
 export interface MemoryDraft {
   type: MemoryType;
   title: string;
   content: string;
   relatedFiles: string[];
+  tags?: string[];
 }
 
 export interface MemoryReflection {
@@ -143,10 +150,22 @@ export interface GeneratedTask {
   message: string;
   taskType: string;
   createdAt: string;
+  updatedAt?: string;
   chunksUsedCount: number;
   memoriesUsedCount: number;
-  patchPreview: PatchPreview[];
-  status: "generated";
+  status: "generated" | "planned" | "patch_generated" | "approved" | "applied" | "pr_created" | "failed";
+  plan?: string;
+  chunksUsed?: ScoredRagChunk[];
+  memoriesUsed?: ScoredMemory[];
+  patchPreview: ExecutablePatch[];
+  testsToRun?: string[];
+  risks?: string[];
+  filesTouched?: string[];
+  branchName?: string;
+  commitSha?: string;
+  prUrl?: string;
+  error?: string;
+  memoryToSave?: MemoryDraft[];
 }
 
 export interface ImportedProject extends ProjectBrain {
