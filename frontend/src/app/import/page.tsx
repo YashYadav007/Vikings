@@ -2,10 +2,26 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Loader2, RotateCcw, TriangleAlert } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  Database,
+  FileSearch,
+  FileStack,
+  Github,
+  Loader2,
+  RotateCcw,
+  TriangleAlert,
+} from "lucide-react";
 import { importRepo } from "@/lib/api";
 import type { ImportResponse } from "@/lib/types";
-import { Card, ErrorState, IconBadge, PageShell } from "@/components/ui";
+import { Button, Card, CornerFrame, ErrorState, GradientText, HudLabel, IconBadge, PageShell } from "@/components/ui";
+
+const PIPELINE = [
+  { icon: FileSearch, label: "Scan files" },
+  { icon: FileStack, label: "Index chunks" },
+  { icon: Database, label: "Retain memory" },
+];
 
 export default function ImportPage() {
   const [repoUrl, setRepoUrl] = useState("");
@@ -30,74 +46,108 @@ export default function ImportPage() {
   return (
     <PageShell>
       <div className="mx-auto max-w-3xl">
-        <h1 className="text-3xl font-semibold text-white">Import GitHub Repo</h1>
-        <p className="mt-2 text-slate-400">Create or refresh a Project Brain from a public GitHub repository.</p>
+        {/* Hero */}
+        <section className="animate-fade-up">
+          <HudLabel>// Ingest</HudLabel>
+          <h1 className="mt-3 font-display text-4xl leading-[1.05] tracking-tight text-cream sm:text-5xl">
+            Import <GradientText>GitHub Repo</GradientText>
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-muted sm:text-base">
+            Create or refresh a Project Brain from a public GitHub repository. We scan the tree, index code into
+            retrievable chunks, and retain architecture memory.
+          </p>
+          <div className="rainbow-rule mt-7 w-full" />
+        </section>
 
-        <Card className="mt-6">
-          <form onSubmit={onSubmit} className="space-y-4">
+        {/* Pipeline strip */}
+        <div className="mt-6 flex flex-wrap items-center gap-2 font-mono text-[0.7rem] uppercase tracking-[0.16em] text-muted">
+          {PIPELINE.map((step, i) => (
+            <span key={step.label} className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-line bg-white/[0.03] px-2.5 py-1 text-cream-dim">
+                <step.icon size={13} className="text-brand-teal" />
+                {step.label}
+              </span>
+              {i < PIPELINE.length - 1 ? <ArrowRight size={12} className="text-line" /> : null}
+            </span>
+          ))}
+        </div>
+
+        {/* Form */}
+        <Card className="mt-6" framed>
+          <form onSubmit={onSubmit} className="space-y-5">
             <label className="block">
-              <span className="text-sm font-medium text-slate-300">GitHub repo URL</span>
-              <input
-                value={repoUrl}
-                onChange={(event) => setRepoUrl(event.target.value)}
-                placeholder="https://github.com/owner/repo"
-                className="mt-2 w-full rounded-md border border-workspace-border bg-slate-950 px-4 py-3 text-white outline-none ring-sky-400/40 transition placeholder:text-slate-600 focus:ring-2"
-                required
-              />
+              <HudLabel>GitHub Repo URL</HudLabel>
+              <div className="mt-2 flex items-center gap-3 rounded-md border border-line bg-ink-900 px-3 transition focus-within:border-brand-purple/60 focus-within:shadow-glow">
+                <Github size={18} className="shrink-0 text-muted" />
+                <input
+                  value={repoUrl}
+                  onChange={(event) => setRepoUrl(event.target.value)}
+                  placeholder="https://github.com/owner/repo"
+                  className="w-full bg-transparent py-3 font-mono text-sm text-cream outline-none placeholder:text-muted/60"
+                  required
+                />
+              </div>
             </label>
-            <button
-              disabled={loading}
-              className="inline-flex min-h-11 items-center justify-center rounded-md bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {loading ? <Loader2 className="mr-2 animate-spin" size={17} /> : <RotateCcw className="mr-2" size={17} />}
+            <Button type="submit" disabled={loading}>
+              {loading ? <Loader2 className="animate-spin" size={16} /> : <RotateCcw size={16} />}
               {loading ? "Importing repository..." : "Import Repo"}
-            </button>
+            </Button>
           </form>
         </Card>
 
+        {/* Loading */}
         {loading ? (
           <Card className="mt-5">
-            <div className="flex items-center gap-3 text-slate-300">
-              <Loader2 className="animate-spin text-sky-300" size={20} />
-              <span>Scanning files, indexing chunks, and retaining architecture memory...</span>
+            <div className="flex items-center gap-3 text-cream-dim">
+              <Loader2 className="animate-spin text-brand-teal" size={20} />
+              <span className="text-sm">Scanning files, indexing chunks, and retaining architecture memory...</span>
             </div>
           </Card>
         ) : null}
 
+        {/* Error */}
         {error ? <div className="mt-5"><ErrorState message={error} /></div> : null}
 
+        {/* Result */}
         {result ? (
-          <Card className="mt-5">
+          <Card className="mt-5 animate-fade-up" framed>
+            <div className="absolute inset-x-0 top-0 h-px bg-brand-rainbow" />
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
+              <div className="min-w-0">
                 <IconBadge icon={CheckCircle2} tone="green">Import complete</IconBadge>
-                <h2 className="mt-3 text-2xl font-semibold text-white">{result.project.name}</h2>
-                <p className="mt-1 break-all text-sm text-slate-400">{result.project.repoUrl}</p>
+                <h2 className="mt-3 truncate font-display text-2xl text-cream">{result.project.name}</h2>
+                <p className="mt-1 truncate font-mono text-xs text-muted">{result.project.repoUrl}</p>
               </div>
-              <Link href={`/projects/${result.project.id}`} className="inline-flex min-h-11 items-center justify-center rounded-md bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-sky-300">
+              <Link
+                href={`/projects/${result.project.id}`}
+                className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-md border border-brand-orange bg-brand-orange px-4 py-2 font-mono text-[0.78rem] font-semibold uppercase tracking-[0.14em] text-ink-900 transition-all hover:bg-transparent hover:text-brand-orange hover:shadow-glow-orange"
+              >
                 Open Project Brain
-                <ArrowRight className="ml-2" size={17} />
+                <ArrowRight size={16} />
               </Link>
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
               <SummaryMetric label="Files scanned" value={result.importSummary.filesScanned} />
               <SummaryMetric label="Files indexed" value={result.importSummary.filesIndexed} />
               <SummaryMetric label="Chunks created" value={result.importSummary.chunksCreated} />
-              <SummaryMetric label="Memory retained" value={String(result.importSummary.memoryRetained)} />
-              <SummaryMetric label="Project reused" value={String(result.importSummary.projectReused)} />
+              <SummaryMetric label="Memory retained" value={result.importSummary.memoryRetained ? "Yes" : "No"} />
+              <SummaryMetric label="Project reused" value={result.importSummary.projectReused ? "Yes" : "No"} />
               <SummaryMetric label="Memory count" value={result.project.memoryCount ?? 0} />
             </div>
 
             {result.importSummary.warnings.length ? (
-              <div className="mt-5 rounded-md border border-amber-400/30 bg-amber-950/20 p-4">
-                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-200">
-                  <TriangleAlert size={16} />
+              <div className="mt-5 rounded-md border border-brand-yellow/30 bg-brand-yellow/[0.06] p-4">
+                <div className="mb-2 flex items-center gap-2 font-mono text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-brand-yellow">
+                  <TriangleAlert size={15} />
                   Warnings
                 </div>
-                <ul className="space-y-1 text-sm text-amber-100/80">
+                <ul className="space-y-1 text-sm text-cream-dim">
                   {result.importSummary.warnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
+                    <li key={warning} className="flex gap-2">
+                      <span className="text-brand-yellow/70">—</span>
+                      {warning}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -111,9 +161,10 @@ export default function ImportPage() {
 
 function SummaryMetric({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-md border border-workspace-border bg-slate-950/40 p-3">
-      <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-white">{value}</p>
+    <div className="relative overflow-hidden rounded-md border border-line bg-ink-900/50 p-3.5">
+      <CornerFrame />
+      <p className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-muted">{label}</p>
+      <p className="mt-1 font-display text-xl text-cream">{value}</p>
     </div>
   );
 }
