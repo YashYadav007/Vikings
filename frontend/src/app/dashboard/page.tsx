@@ -11,7 +11,7 @@ import {
   CornerFrame,
   EmptyState,
   ErrorState,
-  GradientText,
+  FramedTitle,
   HudLabel,
   IconBadge,
   LoadingState,
@@ -37,37 +37,37 @@ export default function DashboardPage() {
   return (
     <PageShell>
       {/* Hero */}
-      <section className="animate-fade-up">
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <HudLabel>// Workspace</HudLabel>
-            <h1 className="mt-3 font-display text-4xl leading-[1.05] tracking-tight text-cream sm:text-5xl">
-              Project <GradientText>Dashboard</GradientText>
-            </h1>
-            <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted sm:text-base">
-              Open a persistent Project Brain or import a public GitHub repository to give your agent durable memory.
-            </p>
-          </div>
-          <ProviderStatusBadge />
+      <section className="flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
+        <div>
+          <FramedTitle pretitle="Workspace / Project Brains">
+            Project Dashboard
+          </FramedTitle>
+          <p className="mt-5 max-w-xl pl-[1.4rem] text-sm leading-relaxed text-cream/55 sm:text-base">
+            Open a persistent Project Brain or import a public GitHub repository to give your agent durable memory.
+          </p>
         </div>
-        <div className="rainbow-rule mt-7 w-full" />
+        <div className="flex flex-col items-start gap-4 lg:items-end">
+          <ProviderStatusBadge />
+          <ButtonLink href="/import">
+            <Plus size={15} />
+            Import Repo
+          </ButtonLink>
+        </div>
       </section>
 
+      <div className="hairline mt-10" />
+
       {/* Stat strip */}
-      <section className="mt-7 grid gap-3 sm:grid-cols-3">
+      <section className="mt-8 grid gap-px overflow-hidden border border-cream/15 bg-cream/15 sm:grid-cols-3">
         <StatTile icon={Boxes} label="Project Brains" value={projects.length} tone="purple" />
         <StatTile icon={History} label="Memories Retained" value={totalMemories} tone="green" />
         <StatTile icon={Database} label="Indexed Chunks" value={totalChunks} tone="blue" />
       </section>
 
       {/* Content */}
-      <section className="mt-10">
+      <section className="mt-12">
         <div className="mb-5 flex items-center justify-between">
-          <HudLabel>Active Brains{projects.length ? ` — ${projects.length}` : ""}</HudLabel>
-          <ButtonLink href="/import" variant="ghost">
-            <Plus size={15} />
-            Import Repo
-          </ButtonLink>
+          <HudLabel>{`Active Brains${projects.length ? ` — ${String(projects.length).padStart(2, "0")}` : ""}`}</HudLabel>
         </div>
 
         {loading ? <LoadingState label="Loading projects..." /> : null}
@@ -93,20 +93,24 @@ function ProjectCard({ project, index }: { project: ProjectBrain; index: number 
   return (
     <Link
       href={`/projects/${project.id}`}
-      className="group relative block animate-fade-up rounded-xl"
+      className="group relative block animate-fade-up"
       style={{ animationDelay: `${Math.min(index * 60, 300)}ms` }}
     >
-      <div className="relative overflow-hidden rounded-xl border border-line bg-ink-800/80 p-5 shadow-hud transition-all duration-300 group-hover:border-brand-purple/40 group-hover:shadow-glow">
-        <CornerFrame className="opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-        {/* top gradient seam */}
-        <div className="absolute inset-x-0 top-0 h-px bg-brand-rainbow opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+      <div className="relative overflow-hidden border border-cream/15 bg-cream/[0.012] p-5 transition-colors duration-300 group-hover:border-cream/35">
+        <CornerFrame
+          tone="rainbow"
+          className="opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        />
+        {/* rainbow seam appears on hover, echoing the hero stroke */}
+        <div className="absolute inset-x-0 top-0 h-[2px] bg-brand-rainbow opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h2 className="truncate font-display text-xl text-cream">{project.name}</h2>
-            <p className="mt-1 truncate font-mono text-xs text-muted">{project.repoUrl}</p>
+            <p className="hud-label !text-[0.6rem]">{`Brain // ${String(index + 1).padStart(2, "0")}`}</p>
+            <h2 className="mt-1.5 truncate font-display text-xl text-cream">{project.name}</h2>
+            <p className="mt-1 truncate font-mono text-xs text-cream/40">{project.repoUrl}</p>
           </div>
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-line bg-white/[0.03] text-muted transition-all group-hover:border-brand-orange group-hover:bg-brand-orange group-hover:text-ink-900">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center border border-cream/20 text-cream/60 transition-all group-hover:border-brand-orange group-hover:bg-brand-orange group-hover:text-ink-900">
             <ArrowRight size={16} />
           </span>
         </div>
@@ -119,17 +123,17 @@ function ProjectCard({ project, index }: { project: ProjectBrain; index: number 
           </div>
         ) : null}
 
-        <div className="mt-5 grid grid-cols-3 gap-3">
+        <div className="mt-5 grid grid-cols-3 gap-px border border-cream/15 bg-cream/15">
           <MiniMetric icon={Boxes} label="Modules" value={project.modules.length} />
           <MiniMetric icon={History} label="Memories" value={project.memoryCount ?? 0} />
           <MiniMetric icon={Database} label="Chunks" value={project.chunkCount ?? 0} />
         </div>
 
-        <div className="mt-4 flex items-start gap-2 rounded-md border border-line bg-ink-900/60 px-3 py-2.5">
+        <div className="mt-4 flex items-start gap-2 border border-cream/12 px-3 py-2.5">
           <GitBranch size={14} className="mt-0.5 shrink-0 text-brand-teal" />
-          <p className="text-sm text-cream-dim">
-            <span className="font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted">Last task</span>{" "}
-            <span className="block">{project.lastTask || "None recorded"}</span>
+          <p className="text-sm text-cream/75">
+            <span className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-cream/40">Last task</span>
+            <span className="mt-0.5 block">{project.lastTask || "None recorded"}</span>
           </p>
         </div>
       </div>
@@ -154,23 +158,23 @@ function StatTile({
     blue: "text-brand-blue",
   };
   return (
-    <Card className="flex items-center gap-4 !p-4">
-      <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-md border border-line bg-white/[0.03] ${tones[tone]}`}>
+    <div className="flex items-center gap-4 bg-ink-900 p-5">
+      <span className={`grid h-11 w-11 shrink-0 place-items-center border border-cream/15 ${tones[tone]}`}>
         <Icon size={20} />
       </span>
       <div>
-        <p className="font-display text-2xl text-cream">{value}</p>
-        <HudLabel className="!text-[0.62rem]">{label}</HudLabel>
+        <p className="font-display text-3xl leading-none text-cream">{value}</p>
+        <p className="hud-label mt-1.5 !text-[0.6rem]">{label}</p>
       </div>
-    </Card>
+    </div>
   );
 }
 
 function MiniMetric({ icon: Icon, label, value }: { icon: typeof GitBranch; label: string; value: string | number }) {
   return (
-    <div className="rounded-md border border-line bg-ink-900/50 p-3">
-      <Icon className="text-brand-teal" size={16} />
-      <p className="mt-2 font-mono text-[0.6rem] uppercase tracking-[0.16em] text-muted">{label}</p>
+    <div className="bg-ink-900 p-3">
+      <Icon className="text-brand-teal" size={15} />
+      <p className="mt-2 font-mono text-[0.58rem] uppercase tracking-[0.16em] text-cream/40">{label}</p>
       <p className="mt-0.5 font-display text-lg text-cream">{value}</p>
     </div>
   );

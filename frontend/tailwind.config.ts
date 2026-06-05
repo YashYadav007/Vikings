@@ -10,7 +10,8 @@ const config: Config = {
           DEFAULT: "#0a090f",
           950: "#070609",
           900: "#0a090f",
-          800: "#100e17",
+          card: "#09090e",
+          800: "#0f0e15",
           700: "#16131f",
           600: "#1d1929",
         },
@@ -19,7 +20,7 @@ const config: Config = {
           dim: "#c8c8c2",
         },
         muted: "#858580",
-        line: "#2a2833",
+        line: "#353539",
         brand: {
           purple: "#724ce8",
           violet: "#c8beff",
@@ -32,8 +33,8 @@ const config: Config = {
         // Back-compat aliases used by the rest of the app, remapped to the new theme
         workspace: {
           bg: "#0a090f",
-          card: "#100e17",
-          border: "#2a2833",
+          card: "#09090e",
+          border: "#353539",
           blue: "#3898ec",
           purple: "#724ce8",
           success: "#26f4d0",
@@ -56,8 +57,8 @@ const config: Config = {
         hud: "0 1px 0 0 rgba(239,239,229,0.04), 0 24px 60px -28px rgba(0,0,0,0.9)",
       },
       backgroundImage: {
-        "brand-rainbow":
-          "linear-gradient(90deg, #724ce8 0%, #3898ec 28%, #26f4d0 52%, #f8cf3e 76%, #fc6756 100%)",
+        // Canonical landing-page brand gradient (coral -> yellow -> teal -> purple)
+        "brand-rainbow": "linear-gradient(90deg, #fc6756, #f8cf3e 38%, #26f4d0 52%, #724ce8)",
       },
       keyframes: {
         "fade-up": {
