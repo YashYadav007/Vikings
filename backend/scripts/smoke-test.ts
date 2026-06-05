@@ -1,4 +1,13 @@
 const baseUrl = process.env.BASE_URL ?? "http://localhost:4000";
+const hindsightConfigured = Boolean(process.env.HINDSIGHT_API_URL && process.env.HINDSIGHT_API_KEY);
+const memoryProvider = process.env.MEMORY_PROVIDER ?? "local";
+
+class SkipSmokeCheck extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SkipSmokeCheck";
+  }
+}
 
 interface SmokeCheck {
   name: string;
@@ -29,6 +38,18 @@ function expect(condition: unknown, message: string): asserts condition {
   }
 }
 
+function memoryPayload(title: string) {
+  return {
+    projectId: "demo-shopease",
+    memory: {
+      type: "decision",
+      title,
+      content: "Smoke test retained memory persists through the active DevContext memory provider.",
+      relatedFiles: ["src/lib/cartService.ts"],
+    },
+  };
+}
+
 const retainedTitle = `Smoke retained memory ${Date.now()}`;
 
 const checks: SmokeCheck[] = [
@@ -48,6 +69,15 @@ const checks: SmokeCheck[] = [
     },
   },
   {
+    name: "GET /api/memory/provider/status",
+    run: async () => {
+      const result = await request("/api/memory/provider/status");
+      expect(result.activeProvider === "local" || result.activeProvider === "hindsight", "Expected activeProvider");
+      expect(typeof result.bankIdExample === "string", "Expected bankIdExample");
+      expect((result.bankIdExample as string).endsWith(":demo-shopease"), "Expected demo bank ID example");
+    },
+  },
+  {
     name: "POST /api/chat/compare",
     run: async () => {
       const result = await request("/api/chat/compare", {
@@ -61,6 +91,7 @@ const checks: SmokeCheck[] = [
       expect(typeof result.memoryAnswer === "string", "Expected memoryAnswer");
       expect(Array.isArray(result.patchPreview), "Expected patchPreview array");
       expect(Array.isArray(result.memoryToSave), "Expected memoryToSave array");
+      expect(result.memoryProvider === "local" || result.memoryProvider === "hindsight", "Expected memoryProvider");
     },
   },
   {
@@ -83,18 +114,43 @@ const checks: SmokeCheck[] = [
     run: async () => {
       const result = await request("/api/memory/retain", {
         method: "POST",
-        body: JSON.stringify({
-          projectId: "demo-shopease",
-          memory: {
-            type: "decision",
-            title: retainedTitle,
-            content: "Smoke test retained memory persists through the local JSON provider.",
-            relatedFiles: ["src/lib/cartService.ts"],
-          },
-        }),
+        body: JSON.stringify(memoryPayload(retainedTitle)),
       });
       expect(result.success === true, "Expected success true");
       expect((result.memory as { title?: string }).title === retainedTitle, "Expected retained memory title");
+    },
+  },
+  {
+    name: "POST /api/memory/recall",
+    run: async () => {
+      const result = await request("/api/memory/recall", {
+        method: "POST",
+        body: JSON.stringify({
+          projectId: "demo-shopease",
+          query: "coupon calculation order",
+        }),
+      });
+      expect(Array.isArray(result.memories), "Expected memories array");
+    },
+  },
+  {
+    name: "POST /api/memory/reflect",
+    run: async () => {
+      const result = await request("/api/memory/reflect", {
+        method: "POST",
+        body: JSON.stringify({
+          projectId: "demo-shopease",
+          query: "What should we remember after adding coupon support?",
+          context: {
+            task: "Add coupon support",
+            filesTouched: ["src/lib/cartService.ts"],
+            memoriesUsed: ["Coupon calculation order"],
+          },
+        }),
+      });
+      expect(result.provider === "local" || result.provider === "hindsight", "Expected reflection provider");
+      expect(typeof result.reflection === "string", "Expected reflection string");
+      expect(Array.isArray(result.suggestedMemories), "Expected suggestedMemories array");
     },
   },
   {
@@ -108,6 +164,28 @@ const checks: SmokeCheck[] = [
       expect(memories.some((memory) => memory.title === retainedTitle), "Expected retained memory to persist");
     },
   },
+  {
+    name: "Hindsight configured retain/recall path",
+    run: async () => {
+      if (memoryProvider !== "hindsight" || !hindsightConfigured) {
+        throw new SkipSmokeCheck("MEMORY_PROVIDER=hindsight with HINDSIGHT_API_URL and HINDSIGHT_API_KEY is not configured.");
+      }
+
+      const title = `Hindsight smoke memory ${Date.now()}`;
+      await request("/api/memory/retain", {
+        method: "POST",
+        body: JSON.stringify(memoryPayload(title)),
+      });
+      const recall = await request("/api/memory/recall", {
+        method: "POST",
+        body: JSON.stringify({
+          projectId: "demo-shopease",
+          query: title,
+        }),
+      });
+      expect(Array.isArray(recall.memories), "Expected Hindsight recall memories array");
+    },
+  },
 ];
 
 async function main() {
@@ -118,6 +196,11 @@ async function main() {
       await check.run();
       console.log(`PASS ${check.name}`);
     } catch (error) {
+      if (error instanceof SkipSmokeCheck) {
+        console.log(`SKIPPED ${check.name}: ${error.message}`);
+        continue;
+      }
+
       failures += 1;
       const message = error instanceof Error ? error.message : String(error);
       console.error(`FAIL ${check.name}: ${message}`);

@@ -23,8 +23,18 @@ const memoryRetainSchema = z.object({
   memory: memoryDraftSchema,
 });
 
+const memoryReflectSchema = z.object({
+  projectId: z.literal("demo-shopease"),
+  query: z.string().min(1),
+  context: z.unknown().optional(),
+});
+
 export function createMemoryRouter(memoryService: LocalMemoryService): Router {
   const router = Router();
+
+  router.get("/provider/status", (_req, res) => {
+    res.json(memoryService.status());
+  });
 
   router.get("/:projectId", async (req, res, next) => {
     try {
@@ -53,6 +63,16 @@ export function createMemoryRouter(memoryService: LocalMemoryService): Router {
       const body = memoryRetainSchema.parse(req.body);
       const memory = await memoryService.retain(body.projectId, body.memory);
       res.json({ success: true, memory });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/reflect", async (req, res, next) => {
+    try {
+      const body = memoryReflectSchema.parse(req.body);
+      const reflection = await memoryService.reflect(body.projectId, body.query, body.context);
+      res.json(reflection);
     } catch (error) {
       next(error);
     }

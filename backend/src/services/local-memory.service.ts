@@ -1,4 +1,5 @@
-import { Memory, MemoryDraft, ProjectId, ScoredMemory } from "../types";
+import { Memory, MemoryDraft, MemoryProviderStatus, MemoryReflection, ProjectId, ScoredMemory } from "../types";
+import { getMemoryProviderStatus } from "./memory/memory-provider.factory";
 import { MemoryProvider } from "./memory/memory-provider.interface";
 
 export class LocalMemoryService {
@@ -18,6 +19,14 @@ export class LocalMemoryService {
 
   retain(projectId: ProjectId, draft: MemoryDraft): Promise<Memory> {
     return this.provider.retain(projectId, draft);
+  }
+
+  reflect(projectId: ProjectId, query: string, context?: unknown): Promise<MemoryReflection> {
+    return this.provider.reflect(projectId, query, context);
+  }
+
+  status(): MemoryProviderStatus {
+    return getMemoryProviderStatus(this.provider.name);
   }
 
   async count(projectId: ProjectId): Promise<number> {

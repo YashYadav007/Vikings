@@ -70,6 +70,20 @@ export interface MemoryDraft {
   relatedFiles: string[];
 }
 
+export interface MemoryReflection {
+  provider: "local" | "hindsight";
+  reflection: string;
+  suggestedMemories: MemoryDraft[];
+}
+
+export interface MemoryProviderStatus {
+  activeProvider: "local" | "hindsight";
+  configuredProvider: string;
+  hindsightConfigured: boolean;
+  fallbackMode: string;
+  bankIdExample: string;
+}
+
 export interface MemoryPoweredAnswer {
   taskType: string;
   answer: string;
@@ -81,6 +95,7 @@ export interface MemoryPoweredAnswer {
   memoryToSave: MemoryDraft[];
   chunksUsed: ScoredRagChunk[];
   rawMemoriesUsed: ScoredMemory[];
+  memoryProvider?: "local" | "hindsight";
 }
 
 export interface GraphNode {

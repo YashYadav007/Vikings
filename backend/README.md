@@ -28,6 +28,7 @@ USE_MOCK_LLM=true
 MEMORY_PROVIDER=local
 HINDSIGHT_API_URL=
 HINDSIGHT_API_KEY=
+HINDSIGHT_PROJECT_PREFIX=devcontext
 HINDSIGHT_FALLBACK_MODE=local
 ```
 
@@ -35,7 +36,21 @@ HINDSIGHT_FALLBACK_MODE=local
 
 `MEMORY_PROVIDER=local` is the default. Retained memories persist in `backend/.data/runtime-memories.json`. Generated task records persist in `backend/.data/tasks.json`.
 
-`MEMORY_PROVIDER=hindsight` is scaffolded. If `HINDSIGHT_API_URL` or `HINDSIGHT_API_KEY` is missing and `HINDSIGHT_FALLBACK_MODE=local`, the backend logs a warning and falls back to the local JSON provider. Real Hindsight retain/recall/reflect calls are not connected yet.
+`MEMORY_PROVIDER=hindsight` enables the HTTP Hindsight provider. If `HINDSIGHT_API_URL` or `HINDSIGHT_API_KEY` is missing and `HINDSIGHT_FALLBACK_MODE=local`, the backend logs a warning and falls back to the local JSON provider.
+
+Each project uses one Hindsight bank:
+
+```text
+{HINDSIGHT_PROJECT_PREFIX}:{projectId}
+```
+
+Example:
+
+```text
+devcontext:demo-shopease
+```
+
+The provider calls Hindsight retain, recall, reflect, and list endpoints when configured. If any call fails, that operation falls back to local memory.
 
 ## Scripts
 
@@ -72,3 +87,30 @@ Then in another shell:
 ```bash
 npm run smoke
 ```
+
+In local mode, Hindsight-specific checks are reported as `SKIPPED`. To test real Hindsight calls:
+
+```bash
+MEMORY_PROVIDER=hindsight \
+HINDSIGHT_API_URL=https://api.hindsight.vectorize.io \
+HINDSIGHT_API_KEY=your-key \
+npm run dev
+```
+
+Then run:
+
+```bash
+MEMORY_PROVIDER=hindsight \
+HINDSIGHT_API_URL=https://api.hindsight.vectorize.io \
+HINDSIGHT_API_KEY=your-key \
+npm run smoke
+```
+
+## Hindsight HTTP Adapter
+
+- Retain: `POST /v1/default/banks/{bank_id}/memories`
+- Recall: `POST /v1/default/banks/{bank_id}/memories/recall`
+- Reflect: `POST /v1/default/banks/{bank_id}/reflect`
+- List: `GET /v1/default/banks/{bank_id}/memories/list`
+
+The local provider remains the reliable fallback and audit cache.

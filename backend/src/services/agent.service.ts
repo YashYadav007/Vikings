@@ -20,6 +20,7 @@ export class AgentService {
     const chunks = this.ragService.search(projectId, message);
     const memories = await this.memoryService.recall(projectId, message);
     const answer = await this.llmService.generateMemoryAnswer(message, chunks, memories);
+    answer.memoryProvider = this.memoryService.providerName;
     this.taskService.recordGeneratedTask(projectId, message, answer);
     return answer;
   }
@@ -37,6 +38,7 @@ export class AgentService {
       memoriesUsed: memoryAnswer.rawMemoriesUsed,
       patchPreview: memoryAnswer.patchPreview,
       memoryToSave: memoryAnswer.memoryToSave,
+      memoryProvider: this.memoryService.providerName,
     };
   }
 }

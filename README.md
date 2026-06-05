@@ -27,6 +27,7 @@ curl http://localhost:4000/health
 
 - Local mock RAG over seeded code chunks.
 - Provider-backed memory layer with local JSON fallback.
+- Optional Hindsight HTTP memory provider.
 - Local retained memories in `backend/.data/runtime-memories.json`.
 - Local generated task records in `backend/.data/tasks.json`.
 - Mock LLM mode that works without an OpenAI key.
@@ -36,7 +37,6 @@ curl http://localhost:4000/health
 
 ## Not In This Sprint
 
-- Real Hindsight integration.
 - Supabase or pgvector.
 - Database persistence.
 - GitHub repository import.
@@ -48,10 +48,25 @@ Default:
 
 ```env
 MEMORY_PROVIDER=local
+HINDSIGHT_PROJECT_PREFIX=devcontext
 HINDSIGHT_FALLBACK_MODE=local
 ```
 
-Hindsight provider scaffolding exists, but real Hindsight API/SDK calls are pending. The next backend sprint should connect real Hindsight or add GitHub import.
+To enable Hindsight:
+
+```env
+MEMORY_PROVIDER=hindsight
+HINDSIGHT_API_URL=https://api.hindsight.vectorize.io
+HINDSIGHT_API_KEY=your-key
+HINDSIGHT_PROJECT_PREFIX=devcontext
+HINDSIGHT_FALLBACK_MODE=local
+```
+
+Each project gets one bank ID: `{HINDSIGHT_PROJECT_PREFIX}:{projectId}`. Example: `devcontext:demo-shopease`.
+
+If Hindsight credentials are missing or a Hindsight request fails, the backend falls back to the local JSON provider.
+
+RAG remains local keyword search. GitHub import and pgvector are still future work.
 
 ## Generated Files
 

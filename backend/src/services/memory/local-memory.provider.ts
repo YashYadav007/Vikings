@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { seedMemories } from "../../data/seed-memories";
-import { Memory, MemoryDraft, ProjectId, ScoredMemory } from "../../types";
+import { Memory, MemoryDraft, MemoryReflection, ProjectId, ScoredMemory } from "../../types";
 import { keywordScore } from "../../utils/score";
 import { MemoryProvider } from "./memory-provider.interface";
 
@@ -54,6 +54,18 @@ export class LocalMemoryProvider implements MemoryProvider {
     return memory;
   }
 
+  async reflect(projectId: ProjectId, query: string, context?: unknown): Promise<MemoryReflection> {
+    const memories = await this.recall(projectId, query);
+    const suggestedMemories = this.buildSuggestedMemories(context);
+    const memoryTitles = memories.length > 0 ? memories.map((memory) => memory.title).join(", ") : "no matching memories";
+
+    return {
+      provider: "local",
+      reflection: `Local reflection for ${projectId}: ${query}. Relevant memory signals: ${memoryTitles}. Suggested memories are deterministic and should be reviewed before retain.`,
+      suggestedMemories,
+    };
+  }
+
   private ensureStorageFile(): void {
     const directory = dirname(this.storagePath);
 
@@ -81,5 +93,22 @@ export class LocalMemoryProvider implements MemoryProvider {
   private writeRuntimeMemories(memories: Memory[]): void {
     this.ensureStorageFile();
     writeFileSync(this.storagePath, `${JSON.stringify(memories, null, 2)}\n`, "utf8");
+  }
+
+  private buildSuggestedMemories(context: unknown): MemoryDraft[] {
+    const contextRecord = typeof context === "object" && context !== null ? (context as Record<string, unknown>) : {};
+    const filesTouched = Array.isArray(contextRecord.filesTouched)
+      ? contextRecord.filesTouched.filter((file): file is string => typeof file === "string")
+      : [];
+    const task = typeof contextRecord.task === "string" ? contextRecord.task : "Memory reflection";
+
+    return [
+      {
+        type: "decision",
+        title: "Task reflection",
+        content: `After "${task}", retain only durable implementation decisions, risks, and follow-ups. Do not store secrets or temporary debug details.`,
+        relatedFiles: filesTouched,
+      },
+    ];
   }
 }

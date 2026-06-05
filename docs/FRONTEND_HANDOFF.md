@@ -25,6 +25,8 @@ Request:
 
 Render `genericAnswer` beside `memoryAnswer`. Show `chunksUsed`, `memoriesUsed`, `patchPreview`, and `memoryToSave` as supporting evidence for DevContext AI.
 
+Sprint 3 adds optional `memoryProvider` to this response. Frontend can show it as a small badge (`local` or `hindsight`) without changing the existing compare panel.
+
 ## Graph
 
 Use:
@@ -55,6 +57,14 @@ GET /api/memory/demo-shopease
 
 This returns the active memory `provider` plus all visible memories, including locally retained runtime memories.
 
+Provider status:
+
+```http
+GET /api/memory/provider/status
+```
+
+Use this for a demo/debug badge showing active provider and whether Hindsight is configured.
+
 ## Generated Tasks
 
 Use:
@@ -81,5 +91,7 @@ This contains stack, modules, risk areas, memory count, chunk count, and last ta
 - Frontend APIs from Sprint 1 are stable and response shapes are unchanged.
 - `MEMORY_PROVIDER=local` is the default.
 - Retained memories persist locally in `backend/.data/runtime-memories.json`.
-- Hindsight provider scaffolding exists, but real Hindsight calls are pending.
+- Hindsight provider can be enabled with env vars. Each project maps to one bank ID, e.g. `devcontext:demo-shopease`.
+- If Hindsight is not configured or a call fails, backend falls back to local memory.
+- RAG, GitHub import, and pgvector are still not implemented.
 - No frontend code should be placed under `backend/`.

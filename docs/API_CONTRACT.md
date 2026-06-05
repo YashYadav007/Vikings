@@ -6,9 +6,9 @@ Base URL:
 http://localhost:4000
 ```
 
-## GET /health
+All Sprint 1 and Sprint 2 response shapes remain compatible. Sprint 3 only adds optional metadata fields and new memory-provider endpoints.
 
-Returns service status.
+## GET /health
 
 ```json
 {
@@ -23,25 +23,15 @@ Returns demo projects.
 
 ## GET /api/projects/demo-shopease
 
-Returns the ShopEase project brain summary with `id`, `name`, `repoUrl`, `stack`, `modules`, `memoryCount`, `chunkCount`, `riskAreas`, and `lastTask`.
+Returns project brain summary: `id`, `name`, `repoUrl`, `stack`, `modules`, `memoryCount`, `chunkCount`, `riskAreas`, `lastTask`.
 
 ## GET /api/projects/demo-shopease/memory
 
-Returns chronological memory timeline. Existing frontend shape is unchanged.
+Returns chronological memory timeline.
 
 ```json
 {
-  "memories": [
-    {
-      "id": "memory-cart-quantity-bug",
-      "projectId": "demo-shopease",
-      "type": "bug",
-      "title": "Cart quantity bug",
-      "content": "...",
-      "relatedFiles": ["src/lib/cartService.ts"],
-      "createdAt": "2026-05-01T09:00:00.000Z"
-    }
-  ]
+  "memories": []
 }
 ```
 
@@ -51,66 +41,44 @@ Returns React Flow-compatible graph data.
 
 ```json
 {
-  "nodes": [
-    {
-      "id": "project-demo-shopease",
-      "type": "project",
-      "data": { "label": "ShopEase" },
-      "position": { "x": 400, "y": 0 }
-    }
-  ],
-  "edges": [
-    {
-      "id": "edge-project-cart",
-      "source": "project-demo-shopease",
-      "target": "module-cart",
-      "label": "has module"
-    }
-  ]
+  "nodes": [{ "id": "project-demo-shopease", "type": "project", "data": { "label": "ShopEase" }, "position": { "x": 400, "y": 0 } }],
+  "edges": [{ "id": "edge-project-cart", "source": "project-demo-shopease", "target": "module-cart", "label": "has module" }]
 }
 ```
 
 ## POST /api/rag/search
 
-Request:
-
-```json
-{
-  "projectId": "demo-shopease",
-  "query": "Add coupon discount support"
-}
+```bash
+curl -X POST http://localhost:4000/api/rag/search \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"demo-shopease","query":"Add coupon discount support"}'
 ```
 
 Response:
 
 ```json
 {
-  "chunks": [
-    {
-      "id": "chunk-cart-service",
-      "projectId": "demo-shopease",
-      "filePath": "src/lib/cartService.ts",
-      "module": "Cart",
-      "summary": "...",
-      "content": "...",
-      "score": 8
-    }
-  ]
+  "chunks": []
 }
 ```
 
-## POST /api/memory/recall
+## GET /api/memory/provider/status
 
-Request:
+```bash
+curl http://localhost:4000/api/memory/provider/status
+```
+
+Response:
 
 ```json
 {
-  "projectId": "demo-shopease",
-  "query": "Add coupon discount support"
+  "activeProvider": "local",
+  "configuredProvider": "local",
+  "hindsightConfigured": false,
+  "fallbackMode": "local",
+  "bankIdExample": "devcontext:demo-shopease"
 }
 ```
-
-Uses the configured memory provider. `MEMORY_PROVIDER=local` is the default.
 
 ## GET /api/memory/:projectId
 
@@ -130,6 +98,14 @@ Response:
 }
 ```
 
+## POST /api/memory/recall
+
+```bash
+curl -X POST http://localhost:4000/api/memory/recall \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"demo-shopease","query":"coupon calculation order"}'
+```
+
 Response:
 
 ```json
@@ -137,19 +113,62 @@ Response:
   "memories": [
     {
       "id": "memory-coupon-order",
+      "projectId": "demo-shopease",
       "type": "decision",
       "title": "Coupon calculation order",
       "content": "...",
       "relatedFiles": ["src/lib/cartService.ts"],
+      "createdAt": "2026-05-05T10:30:00.000Z",
       "score": 4
     }
   ]
 }
 ```
 
-## POST /api/chat/generic
+## POST /api/memory/retain
 
-Request:
+```bash
+curl -X POST http://localhost:4000/api/memory/retain \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"demo-shopease","memory":{"type":"decision","title":"Coupon calculation order","content":"Apply coupon after quantity normalization","relatedFiles":["src/lib/cartService.ts"]}}'
+```
+
+Response shape is unchanged:
+
+```json
+{
+  "success": true,
+  "memory": {
+    "id": "memory-generated",
+    "projectId": "demo-shopease",
+    "type": "decision",
+    "title": "Coupon calculation order",
+    "content": "Apply coupon after quantity normalization",
+    "relatedFiles": ["src/lib/cartService.ts"],
+    "createdAt": "2026-06-05T00:00:00.000Z"
+  }
+}
+```
+
+## POST /api/memory/reflect
+
+```bash
+curl -X POST http://localhost:4000/api/memory/reflect \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"demo-shopease","query":"What should we remember after adding coupon support?","context":{"task":"Add coupon support","filesTouched":["src/lib/cartService.ts"],"memoriesUsed":["Coupon calculation order"]}}'
+```
+
+Response:
+
+```json
+{
+  "provider": "local",
+  "reflection": "...",
+  "suggestedMemories": []
+}
+```
+
+## POST /api/chat/generic
 
 ```json
 {
@@ -168,48 +187,35 @@ Response:
 
 ## POST /api/chat/memory
 
-Request:
+Creates a generated task record in local JSON storage. It does not auto-retain `memoryToSave`.
 
-```json
-{
-  "projectId": "demo-shopease",
-  "message": "Add coupon discount support"
-}
-```
-
-This creates a generated task record in local JSON storage. It does not auto-retain `memoryToSave`.
-
-Response shape:
+Response shape includes the Sprint 3 optional `memoryProvider` field:
 
 ```json
 {
   "taskType": "feature",
   "answer": "...",
-  "filesUsed": [{ "path": "src/lib/cartService.ts", "reason": "..." }],
-  "memoriesUsed": [{ "type": "bug", "title": "Cart quantity bug", "content": "..." }],
-  "patchPreview": [{ "filePath": "src/lib/cartService.ts", "changeSummary": "...", "diff": "..." }],
-  "testsToRun": ["cart total test"],
-  "risks": ["Checkout total calculation is sensitive to operation order"],
-  "memoryToSave": [{ "type": "decision", "title": "...", "content": "...", "relatedFiles": [] }],
+  "filesUsed": [],
+  "memoriesUsed": [],
+  "patchPreview": [],
+  "testsToRun": [],
+  "risks": [],
+  "memoryToSave": [],
   "chunksUsed": [],
-  "rawMemoriesUsed": []
+  "rawMemoriesUsed": [],
+  "memoryProvider": "local"
 }
 ```
 
 ## POST /api/chat/compare
 
-Request:
-
-```json
-{
-  "projectId": "demo-shopease",
-  "message": "Add coupon discount support"
-}
+```bash
+curl -X POST http://localhost:4000/api/chat/compare \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"demo-shopease","message":"Add coupon discount support"}'
 ```
 
-This creates a generated task record in local JSON storage. Existing compare response shape is unchanged.
-
-Response shape:
+Existing fields are unchanged. Sprint 3 adds optional `memoryProvider`.
 
 ```json
 {
@@ -218,31 +224,12 @@ Response shape:
   "chunksUsed": [],
   "memoriesUsed": [],
   "patchPreview": [],
-  "memoryToSave": []
+  "memoryToSave": [],
+  "memoryProvider": "local"
 }
 ```
-
-## POST /api/memory/retain
-
-Request:
-
-```json
-{
-  "projectId": "demo-shopease",
-  "memory": {
-    "type": "decision",
-    "title": "Coupon calculation order",
-    "content": "Apply coupon after quantity normalization",
-    "relatedFiles": ["src/lib/cartService.ts"]
-  }
-}
-```
-
-Retained memories persist through the local provider in `backend/.data/runtime-memories.json`.
 
 ## GET /api/tasks/:projectId
-
-Returns generated chat tasks for a project.
 
 ```bash
 curl http://localhost:4000/api/tasks/demo-shopease
@@ -253,42 +240,17 @@ Response:
 ```json
 {
   "projectId": "demo-shopease",
-  "tasks": [
-    {
-      "id": "task-generated",
-      "projectId": "demo-shopease",
-      "message": "Add coupon discount support",
-      "taskType": "feature",
-      "createdAt": "2026-06-05T00:00:00.000Z",
-      "chunksUsedCount": 2,
-      "memoriesUsedCount": 2,
-      "patchPreview": [],
-      "status": "generated"
-    }
-  ]
+  "tasks": []
 }
 ```
 
-## Provider Notes
+## Hindsight Provider Notes
 
-- `MEMORY_PROVIDER=local` is the default and uses seeded memories plus local JSON retained memories.
-- `MEMORY_PROVIDER=hindsight` is scaffolded for a future integration.
-- If Hindsight is requested without required env vars and `HINDSIGHT_FALLBACK_MODE=local`, the backend logs a warning and uses local memory.
-- `backend/dist` is generated by `npm run build` and is ignored by source control.
-
-Response:
-
-```json
-{
-  "success": true,
-  "memory": {
-    "id": "memory-generated",
-    "projectId": "demo-shopease",
-    "type": "decision",
-    "title": "Coupon calculation order",
-    "content": "Apply coupon after quantity normalization",
-    "relatedFiles": ["src/lib/cartService.ts"],
-    "createdAt": "2026-06-05T00:00:00.000Z"
-  }
-}
-```
+- Local provider is default: `MEMORY_PROVIDER=local`.
+- Hindsight can be enabled with `MEMORY_PROVIDER=hindsight`, `HINDSIGHT_API_URL`, and `HINDSIGHT_API_KEY`.
+- Bank IDs are generated as `{HINDSIGHT_PROJECT_PREFIX}:{projectId}`. Default example: `devcontext:demo-shopease`.
+- Retain uses `POST /v1/default/banks/{bank_id}/memories`.
+- Recall uses `POST /v1/default/banks/{bank_id}/memories/recall`.
+- Reflect uses `POST /v1/default/banks/{bank_id}/reflect`.
+- List attempts `GET /v1/default/banks/{bank_id}/memories/list`; if unavailable or empty, local seed/audit cache is returned.
+- If Hindsight is missing config or a call fails, local fallback is used automatically.
