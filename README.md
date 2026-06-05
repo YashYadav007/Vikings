@@ -67,6 +67,14 @@ Each project gets one bank ID: `{HINDSIGHT_PROJECT_PREFIX}:{projectId}`. Example
 
 If Hindsight credentials are missing or a Hindsight request fails, the backend falls back to the local JSON provider.
 
+For clean Hindsight demos, set:
+
+```env
+HINDSIGHT_DEMO_SESSION_ID=demo2
+```
+
+This changes remote bank IDs to `{HINDSIGHT_PROJECT_PREFIX}:{HINDSIGHT_DEMO_SESSION_ID}:{projectId}` so old remote memories do not appear in a fresh demo.
+
 ## RAG Provider
 
 Default local mode:
@@ -89,6 +97,29 @@ EMBEDDING_MODEL=text-embedding-3-small
 ```
 
 Run `backend/db/migrations/001_pgvector_rag.sql` in the Supabase SQL editor before enabling pgvector. If Supabase or embeddings are missing, the backend falls back to local keyword RAG.
+
+Repo architecture summaries and initial architecture memories reflect the active RAG provider: pgvector imports mention semantic RAG using Supabase pgvector, while local imports mention keyword search. Chat compare and agent execution use the same active provider and fall back to top indexed chunks if a semantic architecture query returns no direct matches.
+
+## Learning Loop
+
+After an approved agent task, DevContext OS updates only touched files in RAG and retains concise task learning in memory:
+
+- no full repo re-index after task apply
+- no raw full code stored in Hindsight
+- task memory includes what changed, why, risks, tests, PR URL, and RAG update summary
+- future agent plans include `Memory influence` when prior learning is recalled
+- Hindsight retain metadata stringifies arrays/objects such as `relatedFiles` and `tags` for provider compatibility, while API responses keep `relatedFiles` as arrays
+
+Debug endpoints:
+
+- `GET /api/memory/:projectId/learning-summary`
+- `GET /api/rag/:projectId/file-chunks?filePath=README.md`
+
+## Coding Agent
+
+The primary endpoint is `POST /api/tasks/run`. The coding-agent provider decides relevant files, plan, patch preview, risks, tests, and suggested Hindsight memories from RAG + Hindsight context.
+
+Use `CODING_AGENT_PROVIDER=mock` for no-key local development, or `CODING_AGENT_PROVIDER=llm`, `CODING_AGENT_MODEL=gpt-4.1-mini`, `USE_MOCK_LLM=false`, and `OPENAI_API_KEY=your-key` for the hosted LLM coding-agent demo. Compare mode remains available as a debug tool.
 
 ## Import A Public GitHub Repo
 
@@ -114,6 +145,9 @@ Use the returned `project.id` with existing APIs:
 - `GET /api/rag/:projectId/chunks`
 - `GET /api/rag/provider/status`
 - `GET /api/system/status`
+- `GET /api/projects/:projectId/context-debug`
+- `GET /api/memory/:projectId/learning-summary`
+- `GET /api/rag/:projectId/file-chunks?filePath=README.md`
 
 ## Generated Files
 

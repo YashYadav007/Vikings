@@ -1,13 +1,29 @@
 import { Router } from "express";
 import { z } from "zod";
+import { AgentExecutionService } from "../services/agent-execution.service";
 import { TaskService } from "../services/task.service";
 
 const projectParamSchema = z.object({
   projectId: z.string().min(1),
 });
 
-export function createTasksRouter(taskService: TaskService): Router {
+const runTaskSchema = z.object({
+  projectId: z.string().min(1),
+  message: z.string().min(1),
+  mode: z.enum(["safe-auto", "preview-only"]).default("preview-only"),
+});
+
+export function createTasksRouter(taskService: TaskService, agentExecutionService: AgentExecutionService): Router {
   const router = Router();
+
+  router.post("/run", async (req, res, next) => {
+    try {
+      const body = runTaskSchema.parse(req.body);
+      res.json(await agentExecutionService.runTask(body.projectId, body.message, body.mode));
+    } catch (error) {
+      next(error);
+    }
+  });
 
   router.get("/:projectId", (req, res, next) => {
     try {

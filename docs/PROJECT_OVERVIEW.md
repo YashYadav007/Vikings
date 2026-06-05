@@ -18,6 +18,10 @@ Sprint 5 adds safe autonomous execution. The agent can generate a plan and patch
 
 Sprint 6 upgrades RAG from prototype keyword search to a provider-backed layer. Local keyword RAG remains the default, while `RAG_PROVIDER=pgvector` enables Supabase Postgres + pgvector semantic search with OpenAI embeddings. Hindsight verification and reflect behavior are hardened for hosted demos.
 
+Sprint 7 adds the production learning loop. Initial import indexes the selected repo files, while approved task apply updates only changed file chunks in RAG. Hindsight stores concise task learning, decisions, risks, and follow-ups, never raw full code. Future agent plans recall those memories before patch generation and visibly include memory influence.
+
+The current architecture uses a coding-agent provider abstraction. The LLM provider is the hosted-demo target and receives Hindsight memories, learning summary, and RAG chunks before generating a structured patch preview. The mock provider keeps local no-key development deterministic. Compare mode is retained as a debug view, while `/api/tasks/run` is the primary product workflow.
+
 Still mocked or local:
 
 - RAG defaults to local keyword search unless Supabase pgvector and OpenAI embeddings are configured.

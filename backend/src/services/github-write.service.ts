@@ -104,6 +104,15 @@ export class GitHubWriteService {
     return response.sha;
   }
 
+  async getFileContent(owner: string, repo: string, path: string, branch: string): Promise<string> {
+    const response = await this.githubRequest<{ content?: string; encoding?: string }>(
+      `/repos/${owner}/${repo}/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}?ref=${encodeURIComponent(branch)}`,
+      { method: "GET" },
+    );
+    if (!response.content) throw new Error(`Could not get file content for ${path}.`);
+    return Buffer.from(response.content.replace(/\n/g, ""), response.encoding === "base64" ? "base64" : "utf8").toString("utf8");
+  }
+
   async updateFile(owner: string, repo: string, path: string, content: string, message: string, branch: string, sha: string): Promise<string> {
     const response = await this.githubRequest<{ commit?: { sha?: string } }>(
       `/repos/${owner}/${repo}/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}`,

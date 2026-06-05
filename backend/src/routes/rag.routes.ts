@@ -38,5 +38,18 @@ export function createRagRouter(ragService: LocalRagService): Router {
     }
   });
 
+  router.get("/:projectId/file-chunks", async (req, res, next) => {
+    try {
+      const query = z.object({ filePath: z.string().min(1) }).parse(req.query);
+      res.json({
+        projectId: req.params.projectId,
+        filePath: query.filePath,
+        chunks: await ragService.listFileChunks(req.params.projectId, query.filePath),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   return router;
 }

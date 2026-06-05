@@ -18,7 +18,7 @@ export default function LandingPage() {
             Stop re-explaining your codebase. DevContext OS remembers your project across tasks.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <ButtonLink href="/projects/demo-shopease">
+            <ButtonLink href="/projects/demo-shopease/task">
               Open Demo Project
               <ArrowRight className="ml-2" size={17} />
             </ButtonLink>
@@ -43,7 +43,7 @@ export default function LandingPage() {
             <p className="text-green-300">Memory: coupon logic follows quantity normalization</p>
             <p className="text-amber-300">Risk: checkout calculations affect payment totals</p>
             <div className="rounded-md border border-workspace-border bg-slate-950/60 p-4 text-slate-300">
-              DevContext AI uses code chunks plus project journey memory before generating guidance.
+              DevContext AI recalls Hindsight memory, searches RAG, generates a patch, applies safely, and learns after every task.
             </div>
           </div>
         </Card>

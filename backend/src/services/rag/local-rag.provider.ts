@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { seedChunks } from "../../data/seed-chunks";
-import { RagChunk, ScoredRagChunk } from "../../types";
+import { ChangedFile, IncrementalRagUpdateResult, RagChunk, ScoredRagChunk } from "../../types";
 import { keywordScore, tokenize } from "../../utils/score";
 import { IndexChunksResult, RagProvider } from "./rag-provider.interface";
+import { chunkChangedFile } from "./rag-chunking";
 
 export class LocalRagProvider implements RagProvider {
   readonly name = "local" as const;
@@ -46,6 +47,55 @@ export class LocalRagProvider implements RagProvider {
 
   async clearProjectChunks(projectId: string): Promise<void> {
     this.writeImportedChunks(this.readImportedChunks().filter((chunk) => chunk.projectId !== projectId));
+  }
+
+  async deleteFileChunks(projectId: string, filePath: string): Promise<void> {
+    this.writeImportedChunks(this.readImportedChunks().filter((chunk) => chunk.projectId !== projectId || chunk.filePath !== filePath));
+  }
+
+  async upsertFileChunks(projectId: string, filePath: string, chunks: RagChunk[]): Promise<IndexChunksResult> {
+    const existing = this.readImportedChunks().filter((chunk) => chunk.projectId !== projectId || chunk.filePath !== filePath);
+    this.writeImportedChunks([...existing, ...chunks]);
+    return {
+      provider: "local",
+      semanticIndex: false,
+      chunksIndexed: chunks.length,
+      warnings: [],
+    };
+  }
+
+  async updateChangedFiles(projectId: string, changedFiles: ChangedFile[]): Promise<IncrementalRagUpdateResult> {
+    const warnings: string[] = [];
+    let filesUpdated = 0;
+    let filesDeleted = 0;
+    let chunksInserted = 0;
+
+    for (const file of changedFiles) {
+      if (file.status === "deleted") {
+        await this.deleteFileChunks(projectId, file.filePath);
+        filesDeleted += 1;
+        continue;
+      }
+
+      if (!file.content) {
+        warnings.push(`No newContent available for ${file.filePath}; skipped incremental RAG update.`);
+        continue;
+      }
+
+      const chunks = chunkChangedFile(projectId, file);
+      await this.upsertFileChunks(projectId, file.filePath, chunks);
+      filesUpdated += 1;
+      chunksInserted += chunks.length;
+    }
+
+    return {
+      provider: "local",
+      semanticIndex: false,
+      filesUpdated,
+      filesDeleted,
+      chunksInserted,
+      warnings,
+    };
   }
 
   clearProjectChunksWithCount(projectId: string): number {

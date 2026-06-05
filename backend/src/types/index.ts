@@ -1,6 +1,6 @@
 export type ProjectId = string;
 
-export type MemoryType = "bug" | "decision" | "style" | "risk" | "preference" | "task" | "architecture";
+export type MemoryType = "bug" | "decision" | "style" | "risk" | "preference" | "task" | "architecture" | "follow-up";
 
 export interface ProjectModule {
   id: string;
@@ -54,6 +54,9 @@ export interface Memory {
   content: string;
   relatedFiles: string[];
   createdAt: string;
+  provider?: "local" | "hindsight";
+  fallbackUsed?: boolean;
+  fallbackReason?: string;
 }
 
 export interface ScoredMemory extends Memory {
@@ -78,9 +81,26 @@ export interface PatchPreview {
 }
 
 export interface ExecutablePatch extends PatchPreview {
+  status: "added" | "modified" | "deleted";
   originalContentSnippet: string;
   newContent: string;
   risk: string;
+}
+
+export interface ChangedFile {
+  filePath: string;
+  status: "added" | "modified" | "deleted";
+  content?: string;
+  language?: string;
+}
+
+export interface IncrementalRagUpdateResult {
+  provider: "local" | "pgvector";
+  semanticIndex: boolean;
+  filesUpdated: number;
+  filesDeleted: number;
+  chunksInserted: number;
+  warnings: string[];
 }
 
 export interface MemoryDraft {
@@ -118,6 +138,9 @@ export interface MemoryPoweredAnswer {
   chunksUsed: ScoredRagChunk[];
   rawMemoriesUsed: ScoredMemory[];
   memoryProvider?: "local" | "hindsight";
+  ragProvider?: "local" | "pgvector";
+  semanticSearch?: boolean;
+  ragFallbackUsed?: boolean;
 }
 
 export interface GraphNode {
@@ -167,6 +190,11 @@ export interface GeneratedTask {
   prUrl?: string;
   error?: string;
   memoryToSave?: MemoryDraft[];
+  incrementalRagUpdate?: IncrementalRagUpdateResult;
+  agentProvider?: "llm" | "mock" | "claude-code";
+  memoryInfluence?: string;
+  confidence?: number;
+  savedMemories?: Memory[];
 }
 
 export interface ImportedProject extends ProjectBrain {

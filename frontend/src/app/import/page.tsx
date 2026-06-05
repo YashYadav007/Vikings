@@ -74,8 +74,8 @@ export default function ImportPage() {
                 <h2 className="mt-3 text-2xl font-semibold text-white">{result.project.name}</h2>
                 <p className="mt-1 break-all text-sm text-slate-400">{result.project.repoUrl}</p>
               </div>
-              <Link href={`/projects/${result.project.id}`} className="inline-flex min-h-11 items-center justify-center rounded-md bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-sky-300">
-                Open Project Brain
+              <Link href={`/projects/${result.project.id}/task`} className="inline-flex min-h-11 items-center justify-center rounded-md bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-sky-300">
+                Run First Task
                 <ArrowRight className="ml-2" size={17} />
               </Link>
             </div>

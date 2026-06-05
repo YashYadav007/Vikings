@@ -29,6 +29,23 @@ interface HindsightMemoryLike {
   createdAt?: string;
 }
 
+export function normalizeHindsightMetadata(input: Record<string, unknown>): Record<string, string | number | boolean> {
+  const normalized: Record<string, string | number | boolean> = {};
+
+  for (const [key, value] of Object.entries(input)) {
+    if (value === undefined || value === null) continue;
+
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      normalized[key] = value;
+      continue;
+    }
+
+    normalized[key] = JSON.stringify(value);
+  }
+
+  return normalized;
+}
+
 export class HindsightMemoryProvider implements MemoryProvider {
   readonly name = "hindsight" as const;
   private readonly baseUrl: string;
@@ -38,7 +55,8 @@ export class HindsightMemoryProvider implements MemoryProvider {
   }
 
   getBankId(projectId: ProjectId): string {
-    return `${this.config.projectPrefix}:${projectId}`;
+    const sessionId = process.env.HINDSIGHT_DEMO_SESSION_ID?.trim();
+    return sessionId ? `${this.config.projectPrefix}:${sessionId}:${projectId}` : `${this.config.projectPrefix}:${projectId}`;
   }
 
   async ensureBank(_projectId: ProjectId): Promise<void> {
@@ -73,25 +91,32 @@ export class HindsightMemoryProvider implements MemoryProvider {
               }.`,
               timestamp: createdAt,
               source: "devcontext-os",
-              tags: this.toTags(projectId, draft),
-              metadata: {
+              tags: this.toTags(projectId, draft).join(", "),
+              metadata: normalizeHindsightMetadata({
                 type: draft.type,
                 title: draft.title,
                 relatedFiles: draft.relatedFiles,
+                tags: draft.tags ?? this.toTags(projectId, draft),
                 source: "devcontext-os",
                 projectId,
                 createdAt,
-              },
+              }),
             },
           ],
         }),
       });
 
       await this.config.fallbackProvider.retain(projectId, draft);
-      return normalized;
+      return { ...normalized, provider: "hindsight", fallbackUsed: false };
     } catch (error) {
       this.warnAndFallback("retain", error);
-      return this.config.fallbackProvider.retain(projectId, draft);
+      const fallbackMemory = await this.config.fallbackProvider.retain(projectId, draft);
+      return {
+        ...fallbackMemory,
+        provider: "local",
+        fallbackUsed: true,
+        fallbackReason: "Hindsight retain failed",
+      };
     }
   }
 
@@ -229,9 +254,7 @@ export class HindsightMemoryProvider implements MemoryProvider {
 
     const type = this.normalizeType(this.asString(metadata.type) ?? this.asString(item.type));
     const title = this.asString(metadata.title) ?? this.asString(item.title) ?? content.slice(0, 72);
-    const relatedFiles = Array.isArray(metadata.relatedFiles)
-      ? metadata.relatedFiles.filter((file): file is string => typeof file === "string")
-      : [];
+    const relatedFiles = this.parseRelatedFiles(metadata.relatedFiles);
     const score = item.score ?? item.similarity ?? keywordScore(query, [title, content, relatedFiles.join(" ")]);
 
     return {
@@ -263,7 +286,30 @@ export class HindsightMemoryProvider implements MemoryProvider {
   }
 
   private toTags(projectId: ProjectId, draft: MemoryDraft): string[] {
-    return ["devcontext-os", projectId, draft.type, ...draft.relatedFiles.map((file) => `file:${file}`)];
+    return [...new Set(["devcontext-os", projectId, draft.type, ...(draft.tags ?? []), ...draft.relatedFiles.map((file) => `file:${file}`)])];
+  }
+
+  private parseRelatedFiles(value: unknown): string[] {
+    if (Array.isArray(value)) {
+      return value.filter((file): file is string => typeof file === "string");
+    }
+    if (typeof value !== "string" || value.length === 0) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed.filter((file): file is string => typeof file === "string");
+      }
+    } catch {
+      // Hindsight metadata may store relatedFiles as a comma-delimited string.
+    }
+
+    return value
+      .split(",")
+      .map((file) => file.trim())
+      .filter(Boolean);
   }
 
   private extractMemoryArray(response: unknown): HindsightMemoryLike[] {
@@ -369,7 +415,8 @@ export class HindsightMemoryProvider implements MemoryProvider {
       type === "risk" ||
       type === "preference" ||
       type === "task" ||
-      type === "architecture"
+      type === "architecture" ||
+      type === "follow-up"
     ) {
       return type;
     }

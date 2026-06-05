@@ -6,6 +6,8 @@ const pgvectorConfigured = Boolean(process.env.SUPABASE_URL && process.env.SUPAB
 const testGitHubRepo = process.env.TEST_GITHUB_REPO;
 let importedProjectId: string | null = null;
 let executionTaskId: string | null = null;
+let learningTaskId: string | null = null;
+let chunksBeforeLearning = 0;
 
 class SkipSmokeCheck extends Error {
   constructor(message: string) {
@@ -100,6 +102,7 @@ const checks: SmokeCheck[] = [
       expect(typeof result.rag === "object" && result.rag !== null, "Expected RAG status");
       expect(typeof result.llm === "object" && result.llm !== null, "Expected LLM status");
       expect(typeof result.github === "object" && result.github !== null, "Expected GitHub status");
+      expect(typeof result.agent === "object" && result.agent !== null, "Expected agent status");
     },
   },
   {
@@ -114,6 +117,9 @@ const checks: SmokeCheck[] = [
       expect(result.recallOk === true, "Expected recallOk");
       expect(result.reflectOk === true, "Expected reflectOk");
       expect(typeof result.recalledCount === "number", "Expected recalledCount");
+      if (memoryProvider === "hindsight" && hindsightConfigured) {
+        expect(result.fallbackUsed === false, "Expected real Hindsight verification without fallback");
+      }
     },
   },
   {
@@ -276,6 +282,109 @@ const checks: SmokeCheck[] = [
     },
   },
   {
+    name: "POST /api/tasks/run preview-only",
+    run: async () => {
+      const result = await request("/api/tasks/run", {
+        method: "POST",
+        body: JSON.stringify({
+          projectId: "demo-shopease",
+          message: "Improve README with setup instructions",
+          mode: "preview-only",
+        }),
+      });
+      const task = result.task as { id?: string; status?: string };
+      expect(task.status === "patch_generated", "Expected task run patch_generated");
+      expect(result.agentProvider === "mock" || result.agentProvider === "llm" || result.agentProvider === "claude-code", "Expected agent provider");
+      expect(typeof result.memoryInfluence === "string", "Expected memory influence");
+      expect(Array.isArray(result.patchPreview), "Expected patch preview");
+    },
+  },
+  {
+    name: "Learning loop execute README task",
+    run: async () => {
+      const chunksBefore = await request("/api/rag/demo-shopease/chunks");
+      chunksBeforeLearning = (chunksBefore.chunks as unknown[]).length;
+
+      const result = await request("/api/agent/execute", {
+        method: "POST",
+        body: JSON.stringify({
+          projectId: "demo-shopease",
+          message: "Improve README with setup instructions",
+        }),
+      });
+      const task = result.task as { id?: string; status?: string };
+      expect(task.status === "patch_generated", "Expected learning task patch_generated");
+      expect(Array.isArray(result.patchPreview), "Expected learning patch preview");
+      learningTaskId = task.id ?? null;
+    },
+  },
+  {
+    name: "Learning loop apply updates RAG and memory",
+    run: async () => {
+      if (!learningTaskId) throw new SkipSmokeCheck("No learning task id.");
+      const result = await request(`/api/patches/${learningTaskId}/apply`, {
+        method: "POST",
+        body: JSON.stringify({
+          projectId: "demo-shopease",
+          approve: true,
+        }),
+      });
+      expect(result.success === true, "Expected learning apply success");
+      expect(result.memoryRetained === true, "Expected learning memory retained");
+      const update = result.incrementalRagUpdate as { filesUpdated?: number; chunksInserted?: number; warnings?: string[] };
+      expect(typeof update === "object" && update !== null, "Expected incrementalRagUpdate");
+      expect((update.filesUpdated ?? 0) >= 1, "Expected at least one file updated");
+      expect((update.chunksInserted ?? 0) >= 1, "Expected at least one chunk inserted");
+      expect(result.memoryProvider === "local" || result.memoryProvider === "hindsight", "Expected apply memoryProvider");
+      expect(typeof result.memoryFallbackUsed === "boolean", "Expected apply memoryFallbackUsed");
+    },
+  },
+  {
+    name: "Learning summary includes task memory",
+    run: async () => {
+      const result = await request("/api/memory/demo-shopease/learning-summary");
+      expect(result.projectId === "demo-shopease", "Expected learning summary project");
+      expect(typeof result.memoryCount === "number", "Expected memory count");
+      const recentTasks = result.recentTasks as Array<{ title?: string; content?: string }>;
+      expect(Array.isArray(recentTasks), "Expected recent tasks");
+      expect(
+        recentTasks.some((memory) => memory.title === "Improve README with setup instructions"),
+        "Expected retained README task memory",
+      );
+    },
+  },
+  {
+    name: "Learning loop file chunks endpoint",
+    run: async () => {
+      const result = await request("/api/rag/demo-shopease/file-chunks?filePath=README.md");
+      expect(result.projectId === "demo-shopease", "Expected file chunks project");
+      expect(result.filePath === "README.md", "Expected README filePath");
+      const chunks = result.chunks as unknown[];
+      expect(Array.isArray(chunks), "Expected file chunks array");
+      expect(chunks.length > 0, "Expected README chunks after incremental update");
+
+      const allChunks = await request("/api/rag/demo-shopease/chunks");
+      expect((allChunks.chunks as unknown[]).length >= chunksBeforeLearning, "Expected full project chunks not cleared");
+    },
+  },
+  {
+    name: "Future agent plan includes Memory influence",
+    run: async () => {
+      const result = await request("/api/agent/execute", {
+        method: "POST",
+        body: JSON.stringify({
+          projectId: "demo-shopease",
+          message: "Improve README with setup instructions",
+        }),
+      });
+      expect(typeof result.plan === "string", "Expected future plan");
+      expect((result.plan as string).includes("Memory influence"), "Expected memory influence section");
+      const memoriesUsed = result.memoriesUsed as unknown[];
+      expect(Array.isArray(memoriesUsed), "Expected memoriesUsed array");
+      expect(memoriesUsed.length > 0, "Expected future task to recall previous memories");
+    },
+  },
+  {
     name: "Hindsight configured retain/recall path",
     run: async () => {
       if (memoryProvider !== "hindsight" || !hindsightConfigured) {
@@ -308,10 +417,26 @@ const checks: SmokeCheck[] = [
         method: "POST",
         body: JSON.stringify({ repoUrl: testGitHubRepo }),
       });
-      const project = result.project as { id?: string; chunkCount?: number };
-      const summary = result.importSummary as { chunksCreated?: number; ragProvider?: string; semanticIndex?: boolean };
+      const project = result.project as { id?: string; chunkCount?: number; architecture?: string };
+      const summary = result.importSummary as {
+        chunksCreated?: number;
+        ragProvider?: string;
+        semanticIndex?: boolean;
+        memoryProvider?: string;
+        memoryFallbackUsed?: boolean;
+      };
       expect(typeof project.id === "string", "Expected imported project id");
       expect((summary.chunksCreated ?? 0) > 0, "Expected imported chunks");
+      expect(summary.ragProvider === "local" || summary.ragProvider === "pgvector", "Expected import ragProvider");
+      expect(summary.memoryProvider === "local" || summary.memoryProvider === "hindsight", "Expected import memoryProvider");
+      expect(typeof summary.memoryFallbackUsed === "boolean", "Expected import memoryFallbackUsed");
+      if (summary.ragProvider === "pgvector" && summary.semanticIndex === true) {
+        expect(
+          (project.architecture ?? "").includes("semantic RAG chunks using Supabase pgvector"),
+          "Expected pgvector architecture text",
+        );
+        expect(!(project.architecture ?? "").includes("local RAG chunks for keyword search"), "Expected no local keyword architecture text");
+      }
       if (ragProvider === "pgvector" && pgvectorConfigured) {
         expect(summary.ragProvider === "pgvector", "Expected pgvector import when configured");
         expect(summary.semanticIndex === true, "Expected semantic index");
@@ -401,6 +526,19 @@ const checks: SmokeCheck[] = [
     },
   },
   {
+    name: "GET imported project context debug",
+    run: async () => {
+      if (!importedProjectId) {
+        throw new SkipSmokeCheck("No imported project from TEST_GITHUB_REPO.");
+      }
+      const result = await request(`/api/projects/${importedProjectId}/context-debug`);
+      expect(result.projectId === importedProjectId, "Expected context debug project id");
+      expect(typeof result.ragProviderStatus === "object" && result.ragProviderStatus !== null, "Expected RAG provider status");
+      expect(typeof result.chunkCountFromProvider === "number", "Expected provider chunk count");
+      expect(Array.isArray(result.topChunksPreview), "Expected top chunks preview");
+    },
+  },
+  {
     name: "GET imported project RAG chunks",
     run: async () => {
       if (!importedProjectId) {
@@ -437,6 +575,13 @@ const checks: SmokeCheck[] = [
       });
       expect(typeof result.genericAnswer === "string", "Expected imported generic answer");
       expect(typeof result.memoryAnswer === "string", "Expected imported memory answer");
+      const chunksUsed = result.chunksUsed as Array<{ filePath?: string }>;
+      expect(Array.isArray(chunksUsed), "Expected chunksUsed array");
+      expect(chunksUsed.length > 0, "Expected imported architecture compare to use chunks");
+      expect(
+        !(result.memoryAnswer as string).includes("No indexed chunks matched strongly"),
+        "Expected memory answer not to deny indexed chunks when chunks are present",
+      );
     },
   },
 ];

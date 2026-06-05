@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Brain, Database, GitGraph, MessageSquareText, ScrollText } from "lucide-react";
+import { Brain, Bot, Database, GitGraph, MessageSquareText, ScrollText } from "lucide-react";
 import { cn } from "@/lib/format";
 
 const tabs = [
+  { label: "Task", href: "/task", icon: Bot },
   { label: "Brain", href: "", icon: Brain },
-  { label: "Chat", href: "/chat", icon: MessageSquareText },
+  { label: "Compare Mode (Debug)", href: "/chat", icon: MessageSquareText },
   { label: "Graph", href: "/graph", icon: GitGraph },
   { label: "Memory", href: "/memory", icon: ScrollText },
   { label: "RAG Chunks", href: "/chunks", icon: Database },

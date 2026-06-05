@@ -1,7 +1,8 @@
 import { EmbeddingService } from "../embedding.service";
 import { SupabaseService } from "../supabase.service";
-import { RagChunk, ScoredRagChunk } from "../../types";
+import { ChangedFile, IncrementalRagUpdateResult, RagChunk, ScoredRagChunk } from "../../types";
 import { IndexChunksResult, RagProvider } from "./rag-provider.interface";
+import { chunkChangedFile } from "./rag-chunking";
 
 interface MatchCodeChunkRow {
   id: string;
@@ -117,5 +118,84 @@ export class PgvectorRagProvider implements RagProvider {
   async clearProjectChunks(projectId: string): Promise<void> {
     const { error } = await this.supabaseService.getClient().from("code_chunks").delete().eq("project_id", projectId);
     if (error) throw new Error(`Supabase clear chunks failed: ${error.message}`);
+  }
+
+  async deleteFileChunks(projectId: string, filePath: string): Promise<void> {
+    const { error } = await this.supabaseService
+      .getClient()
+      .from("code_chunks")
+      .delete()
+      .eq("project_id", projectId)
+      .eq("file_path", filePath);
+    if (error) throw new Error(`Supabase delete file chunks failed: ${error.message}`);
+  }
+
+  async upsertFileChunks(projectId: string, filePath: string, chunks: RagChunk[]): Promise<IndexChunksResult> {
+    await this.deleteFileChunks(projectId, filePath);
+
+    const rows = [];
+    for (const chunk of chunks) {
+      const embedding = await this.embeddingService.embedChunk(chunk);
+      rows.push({
+        project_id: projectId,
+        file_path: chunk.filePath,
+        language: chunk.language,
+        module: chunk.module,
+        summary: chunk.summary,
+        content: chunk.content,
+        start_line: chunk.startLine,
+        end_line: chunk.endLine,
+        symbols: chunk.symbols ?? [],
+        source: chunk.source ?? "github",
+        metadata: { originalId: chunk.id, incremental: true },
+        embedding,
+      });
+    }
+
+    if (rows.length > 0) {
+      const { error } = await this.supabaseService.getClient().from("code_chunks").insert(rows);
+      if (error) throw new Error(`Supabase incremental insert failed: ${error.message}`);
+    }
+
+    return {
+      provider: "pgvector",
+      semanticIndex: true,
+      chunksIndexed: rows.length,
+      warnings: [],
+    };
+  }
+
+  async updateChangedFiles(projectId: string, changedFiles: ChangedFile[]): Promise<IncrementalRagUpdateResult> {
+    const warnings: string[] = [];
+    let filesUpdated = 0;
+    let filesDeleted = 0;
+    let chunksInserted = 0;
+
+    for (const file of changedFiles) {
+      if (file.status === "deleted") {
+        await this.deleteFileChunks(projectId, file.filePath);
+        filesDeleted += 1;
+        continue;
+      }
+
+      if (!file.content) {
+        warnings.push(`No newContent available for ${file.filePath}; skipped incremental RAG update.`);
+        continue;
+      }
+
+      const chunks = chunkChangedFile(projectId, file);
+      const result = await this.upsertFileChunks(projectId, file.filePath, chunks);
+      filesUpdated += 1;
+      chunksInserted += result.chunksIndexed;
+    }
+
+    return {
+      provider: "pgvector",
+      semanticIndex: true,
+      filesUpdated,
+      filesDeleted,
+      chunksInserted,
+      warnings,
+    };
   }
 }

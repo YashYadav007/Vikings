@@ -1,4 +1,4 @@
-import { RagChunk, ScoredRagChunk } from "../../types";
+import { ChangedFile, IncrementalRagUpdateResult, RagChunk, ScoredRagChunk } from "../../types";
 
 export interface IndexChunksResult {
   provider: "local" | "pgvector";
@@ -24,4 +24,10 @@ export interface RagProvider {
   listChunks(projectId: string): Promise<RagChunk[]>;
 
   clearProjectChunks(projectId: string): Promise<void>;
+
+  deleteFileChunks(projectId: string, filePath: string): Promise<void>;
+
+  upsertFileChunks(projectId: string, filePath: string, chunks: RagChunk[]): Promise<IndexChunksResult>;
+
+  updateChangedFiles(projectId: string, changedFiles: ChangedFile[]): Promise<IncrementalRagUpdateResult>;
 }

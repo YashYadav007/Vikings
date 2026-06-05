@@ -27,6 +27,10 @@ NODE_ENV=development
 USE_MOCK_LLM=true
 OPENAI_API_KEY=
 LLM_PROVIDER=openai
+CODING_AGENT_PROVIDER=mock
+CODING_AGENT_MODEL=gpt-4.1-mini
+CLAUDE_CODE_ENABLED=false
+CLAUDE_CODE_COMMAND=claude
 
 EMBEDDING_PROVIDER=openai
 EMBEDDING_MODEL=text-embedding-3-small
@@ -44,10 +48,13 @@ MEMORY_PROVIDER=local
 HINDSIGHT_API_URL=
 HINDSIGHT_API_KEY=
 HINDSIGHT_PROJECT_PREFIX=devcontext
+HINDSIGHT_DEMO_SESSION_ID=
 HINDSIGHT_FALLBACK_MODE=local
 ```
 
 `USE_MOCK_LLM=true` runs fully offline without an OpenAI key. Set `USE_MOCK_LLM=false` and provide `OPENAI_API_KEY` to use OpenAI.
+
+`CODING_AGENT_PROVIDER=mock` is the no-key default. For hosted LLM agent mode, set `CODING_AGENT_PROVIDER=llm`, `CODING_AGENT_MODEL=gpt-4.1-mini`, `USE_MOCK_LLM=false`, and `OPENAI_API_KEY`. `CODING_AGENT_PROVIDER=claude-code` is an optional adapter path and only runs the CLI when `CLAUDE_CODE_ENABLED=true`.
 
 `RAG_PROVIDER=local` is the default and uses local JSON keyword search. `RAG_PROVIDER=pgvector` enables semantic RAG with Supabase pgvector plus OpenAI embeddings. If Supabase or OpenAI embedding config is missing and `RAG_FALLBACK_MODE=local`, the backend logs a warning and keeps using local RAG.
 
@@ -75,7 +82,21 @@ Example:
 devcontext:demo-shopease
 ```
 
+For clean hosted demos, set `HINDSIGHT_DEMO_SESSION_ID` to create a fresh remote Hindsight namespace without deleting old memories:
+
+```env
+HINDSIGHT_DEMO_SESSION_ID=demo2
+```
+
+The bank ID becomes:
+
+```text
+{HINDSIGHT_PROJECT_PREFIX}:{HINDSIGHT_DEMO_SESSION_ID}:{projectId}
+```
+
 The provider calls Hindsight retain, recall, reflect, and list endpoints when configured. If any call fails, that operation falls back to local memory.
+
+Hindsight metadata is normalized before retain. Provider metadata values are strings, numbers, or booleans; arrays/objects such as `relatedFiles` and `tags` are JSON-stringified for Hindsight compatibility. DevContext API responses still expose `relatedFiles` as arrays. Retain/import/apply responses may include `fallbackUsed`, `fallbackReason`, `memoryProvider`, or `memoryFallbackUsed` when local fallback was used.
 
 ## Scripts
 
@@ -184,6 +205,13 @@ curl http://localhost:4000/api/system/status
 
 Imports index chunks through the active RAG provider. If pgvector indexing or search fails, the service falls back to local keyword RAG and includes a warning in the import/search path.
 
+Repo architecture summaries and initial architecture memories now reflect the active index provider:
+
+- `Indexed X semantic RAG chunks using Supabase pgvector.`
+- `Indexed X local RAG chunks for keyword search.`
+
+Chat and agent execution use the same active RAG provider. For architecture/explain prompts, the backend enriches the RAG query with repo terms such as README, package, manifest, background, content script, popup, service worker, modules, and architecture. If provider search returns no chunks but the project has indexed chunks, chat falls back to top provider-listed chunks and returns `ragFallbackUsed: true`.
+
 ## GitHub Import
 
 Import a public repository:
@@ -216,6 +244,12 @@ Run optional import smoke:
 
 ```bash
 TEST_GITHUB_REPO=https://github.com/octocat/Hello-World npm run smoke
+```
+
+Debug active context for a project:
+
+```bash
+curl http://localhost:4000/api/projects/github-octocat-hello-world/context-debug
 ```
 
 ## Demo Cleanup
@@ -279,3 +313,56 @@ Safety rules:
 - Writes never target main/master directly; a `devcontext/...` branch is created.
 - Missing token or write access returns a safe failure with patch preview.
 - Successful apply retains task outcome memory and updates the task graph.
+
+## Production Learning Loop
+
+Initial repo import performs full selected-file indexing. Approved task apply performs incremental changed-file indexing only:
+
+- Added/modified files delete and replace chunks for that file path.
+- Deleted files remove chunks for that file path.
+- The backend does not clear or rebuild the full project index after a task.
+- pgvector mode embeds only changed-file chunks.
+- local mode updates only matching JSON chunks.
+
+Apply response includes:
+
+```json
+{
+  "incrementalRagUpdate": {
+    "provider": "local",
+    "semanticIndex": false,
+    "filesUpdated": 1,
+    "filesDeleted": 0,
+    "chunksInserted": 1,
+    "warnings": []
+  }
+}
+```
+
+Hindsight learning after apply stores concise durable memory, not raw code. Task memory includes what changed, why, files touched, PR URL, risks, tests, and the RAG update summary. The backend also extracts useful decision/risk/follow-up memories when applicable.
+
+Future agent plans recall Hindsight before patch generation and include a `Memory influence` section when memories are found.
+
+## LLM Coding Agent
+
+Primary task endpoint:
+
+```bash
+curl -X POST http://localhost:4000/api/tasks/run \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"demo-shopease","message":"Improve README setup instructions","mode":"safe-auto"}'
+```
+
+Flow: recall Hindsight, search active RAG, send project/memory/chunk context to the coding-agent provider, validate structured JSON patch output, apply safely when requested, update changed-file RAG chunks, and retain task learning. `/api/agent/execute` remains compatible and now uses the same provider in preview mode. Compare mode is debug only.
+
+Learning summary:
+
+```bash
+curl http://localhost:4000/api/memory/demo-shopease/learning-summary
+```
+
+File-scoped RAG chunks:
+
+```bash
+curl 'http://localhost:4000/api/rag/demo-shopease/file-chunks?filePath=README.md'
+```

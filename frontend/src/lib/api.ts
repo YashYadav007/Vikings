@@ -1,4 +1,4 @@
-import type { CompareResponse, ImportResponse, Memory, MemoryDraft, ProjectBrain, ProjectGraph, ProviderStatus, RagChunk } from "./types";
+import type { CompareResponse, ImportResponse, Memory, MemoryDraft, ProjectBrain, ProjectGraph, ProviderStatus, RagChunk, SystemStatus, TaskRunResponse } from "./types";
 
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000";
 
@@ -47,6 +47,13 @@ export function compareChat(projectId: string, message: string) {
   });
 }
 
+export function runTask(projectId: string, message: string, mode: "safe-auto" | "preview-only") {
+  return apiFetch<TaskRunResponse>("/api/tasks/run", {
+    method: "POST",
+    body: JSON.stringify({ projectId, message, mode }),
+  });
+}
+
 export function retainMemory(projectId: string, memory: MemoryDraft) {
   return apiFetch<{ success: boolean; memory: Memory }>("/api/memory/retain", {
     method: "POST",
@@ -74,4 +81,8 @@ export async function getRagChunks(projectId: string) {
 
 export function getProviderStatus() {
   return apiFetch<ProviderStatus>("/api/memory/provider/status");
+}
+
+export function getSystemStatus() {
+  return apiFetch<SystemStatus>("/api/system/status");
 }

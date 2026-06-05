@@ -92,9 +92,33 @@ export class GraphService {
         edges.push({ id: `edge-${projectNodeId}-${taskId}`, source: projectNodeId, target: taskId, label: "generated task" });
 
         for (const filePath of group.filesTouched.slice(0, 3)) {
-          const fileId = fileNodeIds.get(filePath);
-          if (fileId) {
-            edges.push({ id: `edge-${taskId}-${fileId}`, source: taskId, target: fileId, label: "touches file" });
+          let fileId = fileNodeIds.get(filePath);
+          if (!fileId) {
+            fileId = `file-${this.slug(filePath)}`;
+            fileNodeIds.set(filePath, fileId);
+            nodes.push({
+              id: fileId,
+              type: "file",
+              data: { label: filePath, count: 1 },
+              position: { x: 120 + index * 220, y: 880 },
+            });
+          }
+          edges.push({ id: `edge-${taskId}-${fileId}`, source: taskId, target: fileId, label: "touches file" });
+
+          if (group.incrementalRagUpdate && group.incrementalRagUpdate.chunksInserted > 0) {
+            const ragUpdateId = `rag-update-${this.slug(group.key)}-${this.slug(filePath)}`;
+            nodes.push({
+              id: ragUpdateId,
+              type: "rag-update",
+              data: {
+                label: `RAG updated: ${group.incrementalRagUpdate.chunksInserted} chunk(s)`,
+                provider: group.incrementalRagUpdate.provider,
+                semanticIndex: group.incrementalRagUpdate.semanticIndex,
+                count: 1,
+              },
+              position: { x: 120 + index * 220, y: 1000 },
+            });
+            edges.push({ id: `edge-${fileId}-${ragUpdateId}`, source: fileId, target: ragUpdateId, label: "RAG updated" });
           }
         }
 
@@ -107,6 +131,12 @@ export class GraphService {
             position: { x: 120 + index * 220, y: 900 },
           });
           edges.push({ id: `edge-${taskId}-${prId}`, source: taskId, target: prId, label: "opened PR" });
+        }
+
+        const taskMemory = memories.find((memory) => memory.type === "task" && this.normalize(memory.title) === this.normalize(group.message));
+        if (taskMemory) {
+          const memoryId = `memory-${this.slug(`${taskMemory.type}|${this.normalize(taskMemory.title)}`)}`;
+          edges.push({ id: `edge-${taskId}-${memoryId}`, source: taskId, target: memoryId, label: "retained memory" });
         }
       });
 
@@ -163,8 +193,20 @@ export class GraphService {
     status: string;
     filesTouched: string[];
     prUrl?: string;
+    incrementalRagUpdate?: GeneratedTask["incrementalRagUpdate"];
   }> {
-    const groups = new Map<string, { key: string; message: string; count: number; status: string; filesTouched: string[]; prUrl?: string }>();
+    const groups = new Map<
+      string,
+      {
+        key: string;
+        message: string;
+        count: number;
+        status: string;
+        filesTouched: string[];
+        prUrl?: string;
+        incrementalRagUpdate?: GeneratedTask["incrementalRagUpdate"];
+      }
+    >();
 
     for (const task of tasks) {
       const key = `${task.taskType}|${this.normalize(task.message)}`;
@@ -174,6 +216,7 @@ export class GraphService {
         existing.status = task.status;
         existing.filesTouched = [...new Set([...existing.filesTouched, ...(task.filesTouched ?? [])])];
         existing.prUrl = task.prUrl ?? existing.prUrl;
+        existing.incrementalRagUpdate = task.incrementalRagUpdate ?? existing.incrementalRagUpdate;
       } else {
         groups.set(key, {
           key,
@@ -182,6 +225,7 @@ export class GraphService {
           status: task.status,
           filesTouched: task.filesTouched ?? [],
           prUrl: task.prUrl,
+          incrementalRagUpdate: task.incrementalRagUpdate,
         });
       }
     }

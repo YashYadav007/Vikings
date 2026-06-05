@@ -21,6 +21,25 @@ export class RepoAnalyzerService {
     };
   }
 
+  summarizeImportedArchitecture(params: {
+    metadata: GitHubRepoMetadata;
+    stack: string[];
+    modules: ProjectModule[];
+    chunkCount: number;
+    ragProvider: "local" | "pgvector";
+    semanticIndex: boolean;
+  }): string {
+    const moduleNames = params.modules.map((module) => module.name).join(", ") || "root";
+    const indexSummary =
+      params.ragProvider === "pgvector" && params.semanticIndex
+        ? `Indexed ${params.chunkCount} semantic RAG chunks using Supabase pgvector.`
+        : `Indexed ${params.chunkCount} local RAG chunks for keyword search.`;
+
+    return `${params.metadata.name} is a public GitHub repository imported from ${params.metadata.fullName}. Detected stack: ${
+      params.stack.join(", ") || "unknown"
+    }. Main modules: ${moduleNames}. ${indexSummary}`;
+  }
+
   private detectStack(metadata: GitHubRepoMetadata, packageJson: Record<string, unknown> | null): string[] {
     const stack = new Set<string>();
     if (metadata.language) stack.add(metadata.language);
@@ -100,10 +119,14 @@ export class RepoAnalyzerService {
     modules: ProjectModule[],
     chunks: RagChunk[],
   ): string {
-    const moduleNames = modules.map((module) => module.name).join(", ") || "root";
-    return `${metadata.name} is a public GitHub repository imported from ${metadata.fullName}. Detected stack: ${
-      stack.join(", ") || "unknown"
-    }. Main modules: ${moduleNames}. Indexed ${chunks.length} local RAG chunks for keyword search.`;
+    return this.summarizeImportedArchitecture({
+      metadata,
+      stack,
+      modules,
+      chunkCount: chunks.length,
+      ragProvider: "local",
+      semanticIndex: false,
+    });
   }
 
   private moduleName(path: string): string {

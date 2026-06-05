@@ -43,8 +43,8 @@ export default function DashboardPage() {
                   <h2 className="text-xl font-semibold text-white">{project.name}</h2>
                   <p className="mt-1 break-all text-sm text-slate-400">{project.repoUrl}</p>
                 </div>
-                <Link href={`/projects/${project.id}`} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md bg-sky-400 px-3 text-sm font-semibold text-slate-950 hover:bg-sky-300">
-                  Open Project
+                <Link href={`/projects/${project.id}/task`} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md bg-sky-400 px-3 text-sm font-semibold text-slate-950 hover:bg-sky-300">
+                  Run Task
                   <ArrowRight size={16} />
                 </Link>
               </div>

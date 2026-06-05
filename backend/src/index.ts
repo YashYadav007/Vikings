@@ -23,6 +23,7 @@ import { LlmService } from "./services/llm.service";
 import { LocalMemoryService } from "./services/local-memory.service";
 import { LocalRagService } from "./services/local-rag.service";
 import { createMemoryProvider } from "./services/memory/memory-provider.factory";
+import { createCodingAgentProvider } from "./services/coding-agent/coding-agent-provider.factory";
 import { GitHubWriteService } from "./services/github-write.service";
 import { PatchEngineService } from "./services/patch-engine.service";
 import { ProjectService } from "./services/project.service";
@@ -44,9 +45,10 @@ const githubService = new GitHubService();
 const fileFilterService = new FileFilterService();
 const chunkingService = new ChunkingService();
 const repoAnalyzerService = new RepoAnalyzerService();
-const agentService = new AgentService(ragService, memoryService, llmService, taskService);
+const agentService = new AgentService(ragService, memoryService, llmService, taskService, projectService);
 const patchEngineService = new PatchEngineService();
 const githubWriteService = new GitHubWriteService();
+const codingAgentProvider = createCodingAgentProvider();
 const agentExecutionService = new AgentExecutionService(
   ragService,
   memoryService,
@@ -54,6 +56,7 @@ const agentExecutionService = new AgentExecutionService(
   projectService,
   patchEngineService,
   githubWriteService,
+  codingAgentProvider,
 );
 
 app.use(cors());
@@ -73,9 +76,9 @@ app.use("/api/chat", createChatRouter(agentService));
 app.use("/api/agent", createAgentRouter(agentExecutionService));
 app.use("/api/patches", createPatchesRouter(agentExecutionService));
 app.use("/api/graph", createGraphRouter(graphService, projectService, ragService, memoryService, taskService));
-app.use("/api/tasks", createTasksRouter(taskService));
+app.use("/api/tasks", createTasksRouter(taskService, agentExecutionService));
 app.use("/api/dev", createDevRouter(projectService, ragService, memoryService, taskService));
-app.use("/api/system", createSystemRouter(memoryService, ragService, llmService, githubWriteService));
+app.use("/api/system", createSystemRouter(memoryService, ragService, llmService, githubWriteService, codingAgentProvider));
 app.use(
   "/api/repos",
   createReposRouter(

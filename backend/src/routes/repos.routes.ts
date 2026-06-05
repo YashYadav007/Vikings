@@ -53,7 +53,7 @@ export function createReposRouter(
       const chunks = chunkingService.chunkFiles(projectId, files);
       const analysis = repoAnalyzerService.analyze(metadata, files, chunks);
       const now = new Date().toISOString();
-      const project: ImportedProject = {
+      let project: ImportedProject = {
         id: projectId,
         name: metadata.name,
         repoUrl: metadata.repoUrl,
@@ -75,17 +75,32 @@ export function createReposRouter(
       await ragService.clearProjectChunks(projectId);
       const ragIndexResult = await ragService.indexChunks(projectId, chunks);
       warnings.push(...ragIndexResult.warnings);
+      project = {
+        ...project,
+        architecture: repoAnalyzerService.summarizeImportedArchitecture({
+          metadata,
+          stack: analysis.stack,
+          modules: analysis.modules,
+          chunkCount: ragIndexResult.chunksIndexed,
+          ragProvider: ragIndexResult.provider,
+          semanticIndex: ragIndexResult.semanticIndex,
+        }),
+      };
       const savedProject = projectService.saveImportedProject(project);
 
       let memoryRetained = false;
+      let memoryFallbackUsed = false;
+      let memoryProvider = memoryService.providerName;
       try {
         const retainedMemory = await memoryService.retain(projectId, {
           type: "architecture",
           title: "Initial repo architecture",
-          content: `${analysis.architecture}\nImportant files: ${analysis.importantFiles.join(", ") || "none"}.`,
+          content: `${project.architecture}\nImportant files: ${analysis.importantFiles.join(", ") || "none"}.`,
           relatedFiles: analysis.importantFiles,
         });
         memoryRetained = !(retainedMemory as { duplicate?: boolean }).duplicate;
+        memoryFallbackUsed = Boolean(retainedMemory.fallbackUsed);
+        memoryProvider = retainedMemory.provider ?? memoryService.providerName;
       } catch (error) {
         warnings.push(`Initial architecture memory was not retained: ${error instanceof Error ? error.message : "unknown error"}`);
       }
@@ -98,6 +113,8 @@ export function createReposRouter(
           filesIndexed: files.length,
           chunksCreated: chunks.length,
           memoryRetained,
+          memoryProvider,
+          memoryFallbackUsed,
           projectReused,
           ragProvider: ragIndexResult.provider,
           semanticIndex: ragIndexResult.semanticIndex,
