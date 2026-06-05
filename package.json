@@ -1,0 +1,13 @@
+{
+  "name": "devcontext-os",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Memory-powered AI coding workspace prototype.",
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "smoke": "npm --prefix backend run smoke"
+  },
+  "workspaces": [
+    "backend"
+  ]
+}
