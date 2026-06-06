@@ -1,4 +1,4 @@
-import type { CompareResponse, ImportResponse, Memory, MemoryDraft, ProjectBrain, ProjectGraph, ProviderStatus, RagChunk, SystemStatus, TaskRunResponse } from "./types";
+import type { CompareResponse, DeleteProjectResponse, DemoTaskResponse, ImportResponse, Memory, MemoryDraft, MemoryQualityReport, ProjectBrain, ProjectGraph, ProviderStatus, RagChunk, SyncResponse, SystemStatus, TaskRunResponse } from "./types";
 
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000";
 
@@ -33,10 +33,23 @@ export function getProject(projectId: string) {
   return apiFetch<ProjectBrain>(`/api/projects/${encodeURIComponent(projectId)}`);
 }
 
-export function importRepo(repoUrl: string) {
+export function importRepo(repoUrl: string, forceReindex = false) {
   return apiFetch<ImportResponse>("/api/repos/import", {
     method: "POST",
-    body: JSON.stringify({ repoUrl }),
+    body: JSON.stringify({ repoUrl, forceReindex }),
+  });
+}
+
+export function syncRepo(projectId: string, forceReindex = false) {
+  return apiFetch<SyncResponse>(`/api/repos/${encodeURIComponent(projectId)}/sync`, {
+    method: "POST",
+    body: JSON.stringify({ forceReindex }),
+  });
+}
+
+export function deleteProject(projectId: string) {
+  return apiFetch<DeleteProjectResponse>(`/api/projects/${encodeURIComponent(projectId)}`, {
+    method: "DELETE",
   });
 }
 
@@ -51,6 +64,13 @@ export function runTask(projectId: string, message: string, mode: "safe-auto" | 
   return apiFetch<TaskRunResponse>("/api/tasks/run", {
     method: "POST",
     body: JSON.stringify({ projectId, message, mode }),
+  });
+}
+
+export function runGitCodeTokenSafetyDemo(projectId: string, mode: "safe-auto" | "preview-only") {
+  return apiFetch<DemoTaskResponse>("/api/demo/gitcode-token-safety", {
+    method: "POST",
+    body: JSON.stringify({ projectId, mode }),
   });
 }
 
@@ -72,6 +92,10 @@ export async function getProjectMemories(projectId: string) {
 
 export async function getMemoryDebug(projectId: string) {
   return apiFetch<{ projectId: string; provider: string; memories: Memory[] }>(`/api/memory/${encodeURIComponent(projectId)}`);
+}
+
+export async function getMemoryQualityReport(projectId: string) {
+  return apiFetch<MemoryQualityReport>(`/api/memory/${encodeURIComponent(projectId)}/quality-report`);
 }
 
 export async function getRagChunks(projectId: string) {

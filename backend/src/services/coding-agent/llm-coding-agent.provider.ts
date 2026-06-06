@@ -33,15 +33,17 @@ const resultSchema = z.object({
 });
 
 export class LlmCodingAgentProvider implements CodingAgentProvider {
-  readonly name = "llm" as const;
-  private readonly client: OpenAI;
+  readonly name: "openai" | "llm";
+  private readonly client: OpenAI | null;
   private readonly model: string;
 
-  constructor(apiKey = process.env.OPENAI_API_KEY, model = process.env.CODING_AGENT_MODEL ?? "gpt-4.1-mini") {
-    if (!apiKey) {
-      throw new Error("OPENAI_API_KEY is required for CODING_AGENT_PROVIDER=llm.");
-    }
-    this.client = new OpenAI({ apiKey });
+  constructor(
+    apiKey = process.env.OPENAI_API_KEY,
+    model = process.env.CODING_AGENT_MODEL ?? "gpt-4.1-mini",
+    providerName: "openai" | "llm" = "llm",
+  ) {
+    this.name = providerName;
+    this.client = apiKey ? new OpenAI({ apiKey }) : null;
     this.model = model;
   }
 
@@ -63,6 +65,10 @@ export class LlmCodingAgentProvider implements CodingAgentProvider {
   }
 
   private async complete(content: string): Promise<string> {
+    if (!this.client) {
+      throw new Error("OPENAI_API_KEY is required for CODING_AGENT_PROVIDER=openai.");
+    }
+
     const response = await this.client.chat.completions.create({
       model: this.model,
       messages: [

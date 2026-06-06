@@ -24,6 +24,14 @@ export type ProjectBrain = {
   chunkCount?: number;
   createdAt?: string;
   updatedAt?: string;
+  lastIndexedCommitSha?: string;
+  indexedAt?: string;
+  ragProvider?: "local" | "pgvector";
+  semanticIndex?: boolean;
+  embeddingProvider?: string;
+  embeddingModel?: string;
+  embeddingDimensions?: number;
+  fileHashes?: Record<string, string>;
 };
 
 export type RagChunk = {
@@ -50,6 +58,7 @@ export type Memory = {
   relatedFiles: string[];
   createdAt: string;
   score?: number;
+  memoryKey?: string;
 };
 
 export type PatchPreview = {
@@ -91,7 +100,8 @@ export type IncrementalRagUpdate = {
 
 export type TaskRunResponse = {
   mode: "safe-auto" | "preview-only";
-  agentProvider: "llm" | "mock" | "claude-code";
+  agentProvider: "gemini" | "openai" | "llm" | "ollama" | "mock" | "claude-code" | "curated-demo";
+  agentModel?: string;
   memoryProvider?: "local" | "hindsight";
   memoryFallbackUsed?: boolean;
   ragProvider?: "local" | "pgvector";
@@ -122,6 +132,13 @@ export type TaskRunResponse = {
   } | null;
   incrementalRagUpdate?: IncrementalRagUpdate | null;
   savedMemories?: Memory[];
+  hindsightRetention?: {
+    provider: "local" | "hindsight";
+    fallbackUsed: boolean;
+    retained: Array<{ type: MemoryType; title: string; memoryKey: string; importance: number }>;
+    skipped: Array<{ type: MemoryType; title: string; reason: string; importance: number }>;
+    duplicatesSkipped: number;
+  } | null;
 };
 
 export type ImportResponse = {
@@ -131,9 +148,64 @@ export type ImportResponse = {
     filesIndexed: number;
     chunksCreated: number;
     memoryRetained: boolean;
+    memoryProvider?: "local" | "hindsight";
+    memoryFallbackUsed?: boolean;
     projectReused: boolean;
+    cacheHit?: boolean;
+    reindexed?: boolean;
+    embeddingsGenerated?: number;
+    filesSkippedUnchanged?: number;
+    filesReindexed?: number;
+    changedFiles?: string[];
+    ragProvider?: "local" | "pgvector";
+    semanticIndex?: boolean;
+    embeddingProvider?: string;
+    embeddingModel?: string;
+    embeddingDimensions?: number;
+    indexedAt?: string;
+    lastIndexedCommitSha?: string;
     warnings: string[];
   };
+};
+
+export type SyncResponse = {
+  projectId: string;
+  syncSkipped: boolean;
+  cacheHit: boolean;
+  changedFiles: string[];
+  filesReindexed: number;
+  filesSkippedUnchanged: number;
+  embeddingsGenerated: number;
+  ragProvider?: "local" | "pgvector";
+  semanticIndex?: boolean;
+  embeddingProvider?: string;
+  embeddingModel?: string;
+  warnings: string[];
+};
+
+export type DeleteProjectResponse = {
+  success: boolean;
+  projectId: string;
+  deleted: {
+    project: boolean;
+    ragChunks: number;
+    tasks: number;
+    localMemories: number;
+    cache: boolean;
+  };
+  hindsight: {
+    provider: "local" | "hindsight";
+    remoteDeleteSupported: boolean;
+    action: string;
+  };
+  warnings: string[];
+};
+
+export type DemoTaskResponse = TaskRunResponse & {
+  success: boolean;
+  projectId: string;
+  agentProvider: "curated-demo";
+  agentModel: "gitcode-token-safety-demo";
 };
 
 export type ProviderStatus = {
@@ -158,7 +230,16 @@ export type SystemStatus = {
     pgvectorConfigured: boolean;
     supabaseConfigured: boolean;
     embeddingConfigured: boolean;
+    embeddingProvider?: string;
     fallbackMode: string;
+    embeddingModel?: string;
+    embeddingDimensions?: number;
+  };
+  embeddings?: {
+    provider?: string;
+    model?: string;
+    dimensions?: number;
+    configured: boolean;
   };
   llm: {
     mockMode: boolean;
@@ -169,11 +250,29 @@ export type SystemStatus = {
     mockWrite: boolean;
   };
   agent?: {
-    provider: "llm" | "mock" | "claude-code";
+    provider: "gemini" | "openai" | "llm" | "ollama" | "mock" | "claude-code" | "curated-demo";
     configuredProvider: string;
     model: string;
+    configured?: boolean;
     claudeCodeEnabled: boolean;
   };
+  cache?: {
+    disableAutoReindex: boolean;
+    maxEmbeddingFilesPerImport: number;
+    maxEmbeddingChunksPerImport: number;
+    maxAgentContextChunks: number;
+  };
+};
+
+export type MemoryQualityReport = {
+  projectId: string;
+  provider: "local" | "hindsight";
+  totalMemories: number;
+  duplicateGroups: Array<{ normalizedKey: string; count: number; memories: Memory[] }>;
+  noisyMemories: Memory[];
+  recommendedKeep: Memory[];
+  recommendedArchive: Memory[];
+  latestArchitectureMemory: Memory | null;
 };
 
 export type GraphNode = {

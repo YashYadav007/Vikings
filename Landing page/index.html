@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Hindsight AI - Persistent Memory-Powered RAG LLM Workspace</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Hindsight AI is an agentic coding assistant and RAG LLM engine that builds a persistent memory-powered brain for each repository." />
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/font/lucide.min.css" />
+
+    <style>
+        :root {
+            --bg-color: #030014;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --primary-glow: radial-gradient(circle, rgba(114, 76, 232, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+            --accent-glow: radial-gradient(circle, rgba(38, 244, 208, 0.1) 0%, rgba(0, 0, 0, 0) 70%);
+            
+            --color-primary: #724ce8;
+            --color-accent: #26f4d0;
+            --color-warning: #f8cf3e;
+            --color-danger: #fc6756;
+            
+            --text-main: #f3f1fe;
+            --text-muted: #a19bb8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* Ambient Glow Backdrops */
+        .ambient-glow {
+            position: absolute;
+            width: 800px;
+            height: 800px;
+            background: var(--primary-glow);
+            top: -200px;
+            left: -200px;
+            z-index: -1;
+            pointer-events: none;
+            filter: blur(80px);
+        }
+
+        .ambient-glow-right {
+            position: absolute;
+            width: 800px;
+            height: 800px;
+            background: var(--accent-glow);
+            top: 200px;
+            right: -200px;
+            z-index: -1;
+            pointer-events: none;
+            filter: blur(80px);
+        }
+
+        /* Navigation */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 10;
+        }
+
+        .logo {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: -1px;
+            background: linear-gradient(135deg, #fff 30%, var(--text-muted) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo span {
+            background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-primary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        nav {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        nav a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: color 0.3s;
+            font-weight: 500;
+        }
+
+        nav a:hover {
+            color: var(--text-main);
+        }
+
+        /* Buttons */
+        .btn {
+            background: transparent;
+            border: 1px solid var(--card-border);
+            color: var(--text-main);
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--color-primary) 0%, rgba(114, 76, 232, 0.8) 100%);
+            border: none;
+            box-shadow: 0 4px 20px rgba(114, 76, 232, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(114, 76, 232, 0.5);
+            filter: brightness(1.1);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        /* Hero Section */
+        .hero {
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            align-items: center;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
+            gap: 4rem;
+            min-height: calc(85vh - 80px);
+            position: relative;
+        }
+
+        @media (max-width: 1024px) {
+            .hero {
+                grid-template-columns: 1fr;
+                text-align: center;
+                padding-top: 2rem;
+            }
+            .hero-right {
+                order: -1;
+            }
+        }
+
+        .hero-left {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .badge {
+            background: rgba(114, 76, 232, 0.1);
+            border: 1px solid rgba(114, 76, 232, 0.2);
+            color: #d1c4e9;
+            padding: 0.35rem 1rem;
+            border-radius: 100px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            width: fit-content;
+        }
+        
+        @media (max-width: 1024px) {
+            .badge {
+                margin: 0 auto;
+            }
+        }
+
+        .badge i {
+            color: var(--color-accent);
+            font-size: 0.8rem;
+        }
+
+        h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 4rem;
+            font-weight: 700;
+            line-height: 1.1;
+            letter-spacing: -2px;
+        }
+
+        @media (max-width: 640px) {
+            h1 {
+                font-size: 2.8rem;
+            }
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-primary) 50%, var(--color-danger) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-desc {
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            max-width: 600px;
+        }
+
+        @media (max-width: 1024px) {
+            .hero-desc {
+                margin: 0 auto;
+            }
+        }
+
+        .cta-group {
+            display: flex;
+            gap: 1rem;
+        }
+
+        @media (max-width: 1024px) {
+            .cta-group {
+                justify-content: center;
+            }
+        }
+
+        /* ===== ROBOT SHOWCASE ===== */
+        .hero-right {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .robot-card {
+            background: rgba(10, 5, 30, 0.6);
+            border: 1px solid rgba(114, 76, 232, 0.2);
+            border-radius: 24px;
+            width: 100%;
+            max-width: 480px;
+            aspect-ratio: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 20px 60px rgba(114, 76, 232, 0.25), 0 0 0 1px rgba(38,244,208,0.05);
+            overflow: hidden;
+        }
+
+        /* Grid background inside card */
+        .robot-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(114,76,232,0.06) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(114,76,232,0.06) 1px, transparent 1px);
+            background-size: 32px 32px;
+            border-radius: 24px;
+            pointer-events: none;
+        }
+
+        /* Scanning line */
+        .robot-card::after {
+            content: '';
+            position: absolute;
+            left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(38, 244, 208, 0.7), transparent);
+            box-shadow: 0 0 12px rgba(38, 244, 208, 0.5);
+            animation: scanCard 3s linear infinite;
+            pointer-events: none;
+        }
+
+        @keyframes scanCard {
+            0%   { top: 0%; opacity: 0; }
+            5%   { opacity: 1; }
+            95%  { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        /* ===== ANIMATED ROBOT SVG WRAPPER ===== */
+        .robot-scene {
+            position: relative;
+            width: 280px;
+            height: 280px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            animation: robotFloat 4s ease-in-out infinite;
+        }
+
+        @keyframes robotFloat {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            30%  { transform: translateY(-14px) rotate(0.8deg); }
+            70%  { transform: translateY(-7px) rotate(-0.8deg); }
+        }
+
+        /* Shadow under robot */
+        .robot-shadow {
+            position: absolute;
+            bottom: -8px;
+            width: 140px;
+            height: 20px;
+            background: radial-gradient(ellipse, rgba(114,76,232,0.4) 0%, transparent 70%);
+            border-radius: 50%;
+            animation: shadowPulse 4s ease-in-out infinite;
+        }
+        @keyframes shadowPulse {
+            0%, 100% { transform: scaleX(1);   opacity: 0.5; }
+            30%       { transform: scaleX(0.7); opacity: 0.2; }
+        }
+
+        /* HEAD */
+        .robot-head {
+            width: 100px;
+            height: 80px;
+            background: linear-gradient(145deg, #1e1535, #140d2e);
+            border: 1.5px solid rgba(114,76,232,0.5);
+            border-radius: 18px 18px 14px 14px;
+            position: relative;
+            box-shadow: 0 0 24px rgba(114,76,232,0.3), inset 0 0 12px rgba(114,76,232,0.1);
+            z-index: 3;
+        }
+
+        /* Antenna */
+        .robot-head::before {
+            content: '';
+            position: absolute;
+            top: -18px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 3px;
+            height: 18px;
+            background: linear-gradient(to top, rgba(114,76,232,0.8), rgba(38,244,208,1));
+            border-radius: 2px;
+        }
+        .robot-head::after {
+            content: '';
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 9px;
+            height: 9px;
+            background: var(--color-accent);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--color-accent), 0 0 20px var(--color-accent);
+            animation: antennaBlink 1.8s ease-in-out infinite;
+        }
+        @keyframes antennaBlink {
+            0%, 80%, 100% { opacity: 1; transform: translateX(-50%) scale(1); }
+            90%            { opacity: 0.2; transform: translateX(-50%) scale(0.6); }
+        }
+
+        /* EYES */
+        .robot-eyes {
+            position: absolute;
+            top: 22px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+        }
+        .robot-eye {
+            width: 18px;
+            height: 18px;
+            background: var(--color-accent);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--color-accent), 0 0 20px rgba(38,244,208,0.6);
+            animation: eyeGlow 2.5s ease-in-out infinite;
+            position: relative;
+        }
+        .robot-eye::after {
+            content: '';
+            position: absolute;
+            top: 3px; left: 3px;
+            width: 5px; height: 5px;
+            background: rgba(255,255,255,0.9);
+            border-radius: 50%;
+        }
+        @keyframes eyeGlow {
+            0%, 100% { box-shadow: 0 0 10px var(--color-accent), 0 0 20px rgba(38,244,208,0.6); }
+            50%       { box-shadow: 0 0 20px var(--color-accent), 0 0 40px rgba(38,244,208,0.8), 0 0 60px rgba(38,244,208,0.3); }
+        }
+        /* Blinking */
+        .robot-eye.blink { animation: eyeGlow 2.5s ease-in-out infinite, eyeBlink 4s 1s step-end infinite; }
+        @keyframes eyeBlink {
+            0%, 95%, 100% { transform: scaleY(1); }
+            97%            { transform: scaleY(0.08); }
+        }
+
+        /* MOUTH / speaker bar */
+        .robot-mouth {
+            position: absolute;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+        .robot-mouth span {
+            display: block;
+            width: 5px;
+            background: rgba(114,76,232,0.8);
+            border-radius: 3px;
+            animation: mouthBar 0.6s ease-in-out infinite alternate;
+        }
+        .robot-mouth span:nth-child(1) { height: 6px;  animation-delay: 0s; }
+        .robot-mouth span:nth-child(2) { height: 12px; animation-delay: 0.1s; }
+        .robot-mouth span:nth-child(3) { height: 8px;  animation-delay: 0.2s; }
+        .robot-mouth span:nth-child(4) { height: 14px; animation-delay: 0.15s; }
+        .robot-mouth span:nth-child(5) { height: 6px;  animation-delay: 0.05s; }
+        @keyframes mouthBar {
+            from { transform: scaleY(0.4); opacity: 0.5; }
+            to   { transform: scaleY(1.2); opacity: 1; }
+        }
+
+        /* NECK */
+        .robot-neck {
+            width: 28px;
+            height: 14px;
+            background: linear-gradient(to bottom, #1e1535, #140d2e);
+            border-left: 1.5px solid rgba(114,76,232,0.3);
+            border-right: 1.5px solid rgba(114,76,232,0.3);
+            margin: 0 auto;
+            z-index: 2;
+        }
+
+        /* BODY */
+        .robot-body {
+            width: 130px;
+            height: 110px;
+            background: linear-gradient(145deg, #1e1535, #140d2e);
+            border: 1.5px solid rgba(114,76,232,0.45);
+            border-radius: 14px;
+            position: relative;
+            box-shadow: 0 0 30px rgba(114,76,232,0.2), inset 0 0 20px rgba(114,76,232,0.08);
+            z-index: 2;
+        }
+
+        /* Body center orb */
+        .robot-body::before {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 36px; height: 36px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(38,244,208,0.15) 0%, rgba(114,76,232,0.2) 60%, transparent 100%);
+            border: 1.5px solid rgba(38,244,208,0.5);
+            box-shadow: 0 0 16px rgba(38,244,208,0.4), 0 0 32px rgba(38,244,208,0.15);
+            animation: orbPulse 2s ease-in-out infinite;
+        }
+        @keyframes orbPulse {
+            0%, 100% { transform: translate(-50%,-50%) scale(1);   box-shadow: 0 0 16px rgba(38,244,208,0.4); }
+            50%       { transform: translate(-50%,-50%) scale(1.15); box-shadow: 0 0 30px rgba(38,244,208,0.7), 0 0 60px rgba(38,244,208,0.2); }
+        }
+
+        /* Body grid lines */
+        .robot-body::after {
+            content: '';
+            position: absolute;
+            inset: 8px;
+            border: 1px solid rgba(114,76,232,0.15);
+            border-radius: 8px;
+        }
+
+        /* Body side vents */
+        .robot-vent {
+            position: absolute;
+            top: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .robot-vent.left  { left: 10px; }
+        .robot-vent.right { right: 10px; }
+        .robot-vent span {
+            display: block;
+            width: 16px;
+            height: 3px;
+            background: rgba(114,76,232,0.5);
+            border-radius: 2px;
+        }
+
+        /* ARMS */
+        .robot-arms {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 100%;
+            pointer-events: none;
+        }
+        .robot-arm {
+            position: absolute;
+            top: 10px;
+            width: 24px;
+            height: 80px;
+            background: linear-gradient(to bottom, #1e1535, #140d2e);
+            border: 1.5px solid rgba(114,76,232,0.4);
+            border-radius: 8px;
+        }
+        .robot-arm.left {
+            left: -30px;
+            transform-origin: top center;
+            animation: armSwingLeft 4s ease-in-out infinite;
+        }
+        .robot-arm.right {
+            right: -30px;
+            transform-origin: top center;
+            animation: armSwingRight 4s ease-in-out infinite;
+        }
+        @keyframes armSwingLeft {
+            0%, 100% { transform: rotate(-8deg); }
+            50%       { transform: rotate(8deg); }
+        }
+        @keyframes armSwingRight {
+            0%, 100% { transform: rotate(8deg); }
+            50%       { transform: rotate(-8deg); }
+        }
+        /* Hand */
+        .robot-arm::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 20px; height: 20px;
+            background: linear-gradient(145deg, #2a1a50, #1e1040);
+            border: 1.5px solid rgba(38,244,208,0.5);
+            border-radius: 6px;
+            box-shadow: 0 0 8px rgba(38,244,208,0.3);
+        }
+
+        /* LEGS */
+        .robot-legs {
+            display: flex;
+            gap: 24px;
+            margin-top: 0;
+        }
+        .robot-leg {
+            width: 28px;
+            height: 60px;
+            background: linear-gradient(to bottom, #1e1535, #140d2e);
+            border: 1.5px solid rgba(114,76,232,0.35);
+            border-radius: 6px 6px 8px 8px;
+            position: relative;
+        }
+        .robot-leg.left  { animation: legLeft 4s ease-in-out infinite; transform-origin: top center; }
+        .robot-leg.right { animation: legRight 4s ease-in-out infinite; transform-origin: top center; }
+        @keyframes legLeft {
+            0%, 100% { transform: rotate(4deg); }
+            50%       { transform: rotate(-4deg); }
+        }
+        @keyframes legRight {
+            0%, 100% { transform: rotate(-4deg); }
+            50%       { transform: rotate(4deg); }
+        }
+        /* Foot */
+        .robot-leg::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 36px; height: 12px;
+            background: linear-gradient(145deg, #2a1a50, #1a0e3a);
+            border: 1.5px solid rgba(114,76,232,0.4);
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(114,76,232,0.2);
+        }
+
+        /* ===== ORBIT RINGS ===== */
+        .robot-orbit {
+            position: absolute;
+            border-radius: 50%;
+            border: 1px dashed;
+            pointer-events: none;
+            top: 50%; left: 50%;
+        }
+        .robot-orbit-1 {
+            width: 320px; height: 320px;
+            margin: -160px 0 0 -160px;
+            border-color: rgba(114,76,232,0.15);
+            animation: orbitSpin 12s linear infinite;
+        }
+        .robot-orbit-2 {
+            width: 380px; height: 380px;
+            margin: -190px 0 0 -190px;
+            border-color: rgba(38,244,208,0.08);
+            animation: orbitSpin 20s linear infinite reverse;
+        }
+        @keyframes orbitSpin {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
+        }
+
+        /* Orbiting dot */
+        .orbit-dot {
+            position: absolute;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            top: 50%; left: 50%;
+            animation: orbitDot 6s linear infinite;
+            margin: -4px 0 0 -4px;
+        }
+        .orbit-dot-1 {
+            background: var(--color-accent);
+            box-shadow: 0 0 12px var(--color-accent);
+            animation-duration: 6s;
+        }
+        .orbit-dot-2 {
+            background: var(--color-primary);
+            box-shadow: 0 0 12px var(--color-primary);
+            animation-duration: 9s;
+            animation-direction: reverse;
+        }
+        @keyframes orbitDot {
+            from { transform: rotate(0deg) translateX(160px) rotate(0deg); }
+            to   { transform: rotate(360deg) translateX(160px) rotate(-360deg); }
+        }
+
+        /* ===== HUD CORNER LABELS ===== */
+        .robot-hud {
+            position: absolute;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.62rem;
+            color: rgba(38,244,208,0.5);
+            pointer-events: none;
+        }
+        .robot-hud.tl { top: 16px; left: 20px; }
+        .robot-hud.tr { top: 16px; right: 20px; text-align: right; }
+        .robot-hud.bl { bottom: 16px; left: 20px; }
+        .robot-hud.br { bottom: 16px; right: 20px; text-align: right; }
+        .robot-hud::before {
+            content: '';
+            display: block;
+            width: 12px; height: 12px;
+            border: 1px solid rgba(38,244,208,0.4);
+            position: absolute;
+        }
+        .robot-hud.tl::before { top:0; left:0; border-right:none; border-bottom:none; }
+        .robot-hud.tr::before { top:0; right:0; border-left:none; border-bottom:none; }
+        .robot-hud.bl::before { bottom:0; left:0; border-right:none; border-top:none; }
+        .robot-hud.br::before { bottom:0; right:0; border-left:none; border-top:none; }
+
+        /* ===== SCROLL INDICATOR ===== */
+        .scroll-indicator {
+            position: absolute;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            animation: fadeInUp 1s 1s both;
+        }
+        .scroll-indicator span {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.72rem;
+            color: rgba(161,155,184,0.6);
+            letter-spacing: 0.1em;
+        }
+        .scroll-mouse {
+            width: 24px; height: 38px;
+            border: 2px solid rgba(114,76,232,0.5);
+            border-radius: 12px;
+            position: relative;
+            display: flex;
+            justify-content: center;
+        }
+        .scroll-mouse::before {
+            content: '';
+            position: absolute;
+            top: 6px;
+            width: 4px; height: 8px;
+            background: var(--color-accent);
+            border-radius: 2px;
+            animation: scrollWheel 1.5s ease-in-out infinite;
+        }
+        @keyframes scrollWheel {
+            0%   { top: 6px; opacity: 1; }
+            80%  { top: 18px; opacity: 0.3; }
+            100% { top: 6px; opacity: 0; }
+        }
+        @keyframes fadeInUp {
+            from { opacity:0; transform: translateX(-50%) translateY(12px); }
+            to   { opacity:1; transform: translateX(-50%) translateY(0); }
+        }
+
+        .features {
+            max-width: 1400px;
+            margin: 6rem auto;
+            padding: 0 2rem;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 4rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .section-header h2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2.8rem;
+            font-weight: 700;
+        }
+
+        .section-header p {
+            color: var(--text-muted);
+            max-width: 600px;
+            font-size: 1.1rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 2rem;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--card-border);
+            padding: 2.5rem;
+            border-radius: 16px;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(114, 76, 232, 0.3);
+            box-shadow: 0 10px 30px rgba(114, 76, 232, 0.1);
+        }
+
+        .icon-box {
+            width: 50px;
+            height: 50px;
+            border-radius: 10px;
+            background: rgba(114, 76, 232, 0.1);
+            color: var(--color-accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            border: 1px solid rgba(114, 76, 232, 0.2);
+        }
+
+        .feature-card h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 600;
+        }
+
+        .feature-card p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--card-border);
+            padding: 3rem 2rem;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-glow"></div>
+    <div class="ambient-glow-right"></div>
+
+    <header>
+        <div class="logo">
+            <i class="lucide-brain-circuit" style="color: var(--color-accent);"></i> Hindsight<span>AI</span>
+        </div>
+        <nav>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/import" class="btn btn-secondary"><i class="lucide-plus"></i> Import Repo</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="hero-left">
+                <div class="badge">
+                    <i class="lucide-sparkles"></i> Memory-Powered Agentic RAG
+                </div>
+                <h1>The RAG LLM with a <span class="gradient-text">Persistent Brain</span></h1>
+                <p class="hero-desc">
+                    Hindsight AI automatically builds a persistent learning loop for your codebase. It remembers architecture decisions, changes, and risk profiles so your AI agent performs with unmatched accuracy.
+                </p>
+                <div class="cta-group">
+                    <a href="/import" class="btn btn-primary"><i class="lucide-rocket"></i> Import a Repository</a>
+                    <a href="/dashboard" class="btn btn-secondary"><i class="lucide-layout-dashboard"></i> Open Dashboard</a>
+                </div>
+            </div>
+            
+            <div class="hero-right">
+                <!-- Animated CSS Robot -->
+                <div class="robot-card">
+
+                    <!-- HUD corner labels -->
+                    <div class="robot-hud tl">SYS:ONLINE<br>CPU:23%</div>
+                    <div class="robot-hud tr">v4.7.2<br>READY</div>
+                    <div class="robot-hud bl">MEM:67%<br>◆ ACTIVE</div>
+                    <div class="robot-hud br">AI:CORE<br>NEURAL</div>
+
+                    <!-- Orbit rings -->
+                    <div class="robot-orbit robot-orbit-1"></div>
+                    <div class="robot-orbit robot-orbit-2"></div>
+
+                    <!-- Orbiting dots -->
+                    <div class="orbit-dot orbit-dot-1"></div>
+                    <div class="orbit-dot orbit-dot-2"></div>
+
+                    <!-- Robot Body -->
+                    <div class="robot-scene">
+
+                        <!-- HEAD -->
+                        <div class="robot-head">
+                            <div class="robot-eyes">
+                                <div class="robot-eye blink"></div>
+                                <div class="robot-eye"></div>
+                            </div>
+                            <div class="robot-mouth">
+                                <span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                        </div>
+
+                        <!-- NECK -->
+                        <div class="robot-neck"></div>
+
+                        <!-- BODY with arms -->
+                        <div class="robot-body">
+                            <div class="robot-vent left">
+                                <span></span><span></span><span></span>
+                            </div>
+                            <div class="robot-vent right">
+                                <span></span><span></span><span></span>
+                            </div>
+                            <!-- Arms are absolute inside body -->
+                            <div class="robot-arms">
+                                <div class="robot-arm left"></div>
+                                <div class="robot-arm right"></div>
+                            </div>
+                        </div>
+
+                        <!-- LEGS -->
+                        <div class="robot-legs">
+                            <div class="robot-leg left"></div>
+                            <div class="robot-leg right"></div>
+                        </div>
+
+                        <!-- Shadow -->
+                        <div class="robot-shadow"></div>
+                    </div>
+                </div>
+
+                <!-- Scroll indicator below the card -->
+                <div class="scroll-indicator">
+                    <div class="scroll-mouse"></div>
+                    <span>SCROLL DOWN</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="features">
+            <div class="section-header">
+                <h2>Engineered for Codebases</h2>
+                <p>A persistent knowledge store that turns static RAG into an active repository intelligence center.</p>
+            </div>
+            
+            <div class="grid">
+                <div class="feature-card">
+                    <div class="icon-box">
+                        <i class="lucide-database"></i>
+                    </div>
+                    <h3>Persistent Project Brain</h3>
+                    <p>Every repository gets a persistent database slot that accumulates learning logs, developer preferences, and architectural shifts over time.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="icon-box">
+                        <i class="lucide-refresh-cw"></i>
+                    </div>
+                    <h3>Active Learning Loop</h3>
+                    <p>Unlike standard static RAG, Hindsight records execution results, code risk areas, and PR comments to optimize future generations automatically.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="icon-box">
+                        <i class="lucide-git-branch"></i>
+                    </div>
+                    <h3>Git Integration</h3>
+                    <p>Simply import a public GitHub repository. Hindsight indexes structure, builds file-chunk trees, and maps dependencies automatically.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Hindsight AI. Persistent Memory Engine for Autonomous Coding Agents.</p>
+    </footer>
+</body>
+</html>

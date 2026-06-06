@@ -26,14 +26,16 @@ NODE_ENV=development
 
 USE_MOCK_LLM=true
 OPENAI_API_KEY=
+GEMINI_API_KEY=
 LLM_PROVIDER=openai
 CODING_AGENT_PROVIDER=mock
-CODING_AGENT_MODEL=gpt-4.1-mini
+CODING_AGENT_MODEL=gemini-2.0-flash
 CLAUDE_CODE_ENABLED=false
 CLAUDE_CODE_COMMAND=claude
 
-EMBEDDING_PROVIDER=openai
-EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_PROVIDER=gemini
+EMBEDDING_MODEL=gemini-embedding-2
+EMBEDDING_DIMENSIONS=1536
 
 RAG_PROVIDER=local
 RAG_FALLBACK_MODE=local
@@ -44,6 +46,10 @@ SUPABASE_DB_SCHEMA=public
 GITHUB_TOKEN=
 MOCK_GITHUB_WRITE=true
 TEST_GITHUB_REPO=
+DISABLE_AUTO_REINDEX=true
+MAX_EMBEDDING_FILES_PER_IMPORT=40
+MAX_EMBEDDING_CHUNKS_PER_IMPORT=200
+MAX_AGENT_CONTEXT_CHUNKS=8
 MEMORY_PROVIDER=local
 HINDSIGHT_API_URL=
 HINDSIGHT_API_KEY=
@@ -54,9 +60,9 @@ HINDSIGHT_FALLBACK_MODE=local
 
 `USE_MOCK_LLM=true` runs fully offline without an OpenAI key. Set `USE_MOCK_LLM=false` and provide `OPENAI_API_KEY` to use OpenAI.
 
-`CODING_AGENT_PROVIDER=mock` is the no-key default. For hosted LLM agent mode, set `CODING_AGENT_PROVIDER=llm`, `CODING_AGENT_MODEL=gpt-4.1-mini`, `USE_MOCK_LLM=false`, and `OPENAI_API_KEY`. `CODING_AGENT_PROVIDER=claude-code` is an optional adapter path and only runs the CLI when `CLAUDE_CODE_ENABLED=true`.
+`CODING_AGENT_PROVIDER=mock` is the no-key default. For the recommended hosted agent mode, set `CODING_AGENT_PROVIDER=gemini`, `CODING_AGENT_MODEL=gemini-2.0-flash`, `USE_MOCK_LLM=false`, and `GEMINI_API_KEY`. OpenAI remains supported with `CODING_AGENT_PROVIDER=openai` or `llm` plus `OPENAI_API_KEY`. `CODING_AGENT_PROVIDER=claude-code` is an optional adapter path and only runs the CLI when `CLAUDE_CODE_ENABLED=true`.
 
-`RAG_PROVIDER=local` is the default and uses local JSON keyword search. `RAG_PROVIDER=pgvector` enables semantic RAG with Supabase pgvector plus OpenAI embeddings. If Supabase or OpenAI embedding config is missing and `RAG_FALLBACK_MODE=local`, the backend logs a warning and keeps using local RAG.
+`RAG_PROVIDER=local` is the default and uses local JSON keyword search. `RAG_PROVIDER=pgvector` enables semantic RAG with Supabase pgvector plus the active embedding provider. Recommended hosted embeddings use `EMBEDDING_PROVIDER=gemini`, `EMBEDDING_MODEL=gemini-embedding-2`, and `EMBEDDING_DIMENSIONS=1536` to match the existing `vector(1536)` migration. OpenAI embeddings remain available with `EMBEDDING_PROVIDER=openai`.
 
 `SUPABASE_SERVICE_ROLE_KEY` is backend-only. Never expose it to frontend code.
 
@@ -112,7 +118,7 @@ npm run smoke
 - `routes/`: Express route contracts and validation.
 - `services/local-rag.service.ts`: keyword RAG v0. Replace with pgvector later.
 - `services/rag/`: provider-backed RAG abstraction with local and pgvector providers.
-- `services/embedding.service.ts`: OpenAI embedding generation for semantic RAG.
+- `services/embedding.service.ts` and `services/embeddings/`: Gemini/OpenAI/Ollama embedding providers for semantic RAG.
 - `services/supabase.service.ts`: backend-only Supabase admin client.
 - `services/memory/`: provider-backed memory abstraction.
 - `services/local-memory.service.ts`: facade used by routes and agent.
@@ -191,9 +197,10 @@ Setup:
 ```env
 RAG_PROVIDER=pgvector
 RAG_FALLBACK_MODE=local
-OPENAI_API_KEY=your-openai-key
-EMBEDDING_PROVIDER=openai
-EMBEDDING_MODEL=text-embedding-3-small
+GEMINI_API_KEY=your-gemini-key
+EMBEDDING_PROVIDER=gemini
+EMBEDDING_MODEL=gemini-embedding-2
+EMBEDDING_DIMENSIONS=1536
 ```
 
 Provider status:
@@ -203,7 +210,7 @@ curl http://localhost:4000/api/rag/provider/status
 curl http://localhost:4000/api/system/status
 ```
 
-Imports index chunks through the active RAG provider. If pgvector indexing or search fails, the service falls back to local keyword RAG and includes a warning in the import/search path.
+Imports index chunks through the active RAG provider. If pgvector indexing or search fails, the service falls back to local keyword RAG and includes a warning in the import/search path. Gemini embeddings request 1536 dimensions by default so they fit the existing Supabase vector table.
 
 Repo architecture summaries and initial architecture memories now reflect the active index provider:
 
@@ -230,7 +237,9 @@ Supported URLs:
 Import behavior:
 
 - Fetches repo metadata, default branch, recursive tree, and selected file contents.
-- Re-importing the same repo reuses the same project ID and replaces indexed chunks.
+- Re-importing the same repo without `forceReindex` returns the cached project immediately and does not fetch files or regenerate embeddings.
+- `forceReindex: true` bypasses the cache and uses file hashes to update only changed/deleted file chunks where possible.
+- `POST /api/repos/:projectId/sync` explicitly checks the latest branch commit and skips work when unchanged.
 - Duplicate `Initial repo architecture` memories are skipped.
 - Ignores generated, binary, media, lockfile, and large files.
 - Imports at most 40 useful files for the MVP.
@@ -238,6 +247,47 @@ Import behavior:
 - Persists projects in `backend/.data/projects.json`.
 - Persists chunks in `backend/.data/rag-chunks.json` when local RAG is active or fallback is used.
 - Persists semantic chunks in Supabase `code_chunks` when pgvector RAG is active.
+
+## Delete Project
+
+Imported projects can be deleted through:
+
+```bash
+curl -X DELETE http://localhost:4000/api/projects/:projectId
+```
+
+Delete clears:
+
+- project record and cache metadata/file hashes
+- active RAG chunks, including pgvector rows when active
+- local fallback RAG chunks
+- generated task records
+- local runtime memories
+
+The seed demo project `demo-shopease` is protected and returns `400` unless `allowSeedDelete=true` is supplied in non-production dev mode.
+
+Hindsight remote memory deletion is not attempted unless the provider exposes a safe delete API. The response reports this clearly and recommends changing `HINDSIGHT_DEMO_SESSION_ID` for clean hosted demos. Deleted projects disappear from dashboard and are no longer reachable through normal project APIs.
+
+## Curated Hackathon Demo Task
+
+The curated demo endpoint guarantees one reliable end-to-end DevContext task when live LLM providers are rate-limited:
+
+```bash
+curl -X POST http://localhost:4000/api/demo/gitcode-token-safety \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"github-yashyadav007-gitcode","mode":"safe-auto"}'
+```
+
+It still uses the real system flow:
+
+- recalls Hindsight with a token/security query
+- searches/lists active RAG chunks for `popup.js`, `popup.css`, `background.js`, and `content.js`
+- creates deterministic patch previews for `popup.js` and `popup.css`
+- applies through the existing GitHub write service
+- updates RAG only for changed files
+- saves quality-gated Hindsight task/risk memories
+
+`MOCK_GITHUB_WRITE=true` creates a mock PR for demos without GitHub write access. `MOCK_GITHUB_WRITE=false` plus `GITHUB_TOKEN` creates a real branch named `devcontext/gitcode-token-safety-<shortId>` and PR titled `Add GitHub token safety guard`.
 - Retains an initial `architecture` memory through the active memory provider.
 
 Run optional import smoke:
@@ -342,6 +392,39 @@ Apply response includes:
 Hindsight learning after apply stores concise durable memory, not raw code. Task memory includes what changed, why, files touched, PR URL, risks, tests, and the RAG update summary. The backend also extracts useful decision/risk/follow-up memories when applicable.
 
 Future agent plans recall Hindsight before patch generation and include a `Memory influence` section when memories are found.
+
+## Hindsight Memory Quality
+
+Hindsight stores durable project learning only:
+
+- task outcomes
+- real decisions
+- real risks
+- preferences
+- useful follow-ups
+- material architecture changes
+
+The quality gate rejects generic operational logs, duplicate decisions, RAG indexing events, repeated safety boilerplate, and memories that only restate the current task. RAG update details stay in `task.incrementalRagUpdate`, graph RAG nodes, and the single task outcome memory.
+
+Task/apply responses include:
+
+```json
+{
+  "hindsightRetention": {
+    "provider": "hindsight",
+    "fallbackUsed": false,
+    "retained": [],
+    "skipped": [],
+    "duplicatesSkipped": 0
+  }
+}
+```
+
+Quality report:
+
+```bash
+curl http://localhost:4000/api/memory/demo-shopease/quality-report
+```
 
 ## LLM Coding Agent
 

@@ -1,6 +1,18 @@
+@import url("https://fonts.googleapis.com/css2?family=Epilogue:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Brand display font from the landing page */
+@font-face {
+  font-family: "Violetsans";
+  src: url("https://cdn.prod.website-files.com/64354b8ce4872ad8cd1c7b04/64354f50a05bcf61015b4b01_VioletSans-Regular.woff2") format("woff2"),
+    url("https://cdn.prod.website-files.com/64354b8ce4872ad8cd1c7b04/64354f50aa83861619841527_VioletSans-Regular.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   color-scheme: dark;
@@ -10,13 +22,95 @@
   box-sizing: border-box;
 }
 
+html {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
 body {
   margin: 0;
-  background: #020617;
+  background: #0a090f;
+  color: #efefe5;
+  font-family: "Epilogue", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 ::selection {
-  background: rgba(56, 189, 248, 0.35);
+  background: rgba(114, 76, 232, 0.4);
+  color: #efefe5;
+}
+
+/* Thin brand scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #0a090f;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2833;
+  border-radius: 999px;
+  border: 2px solid #0a090f;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3746;
+}
+
+/* HUD mono label helper (matches .hero-pre-title / .explore-link-text) */
+.hud-label {
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: 0.72rem;
+  color: rgba(239, 239, 229, 0.55);
+}
+
+/* Thin full-width hairline rule (matches the landing's #353539 dividers) */
+.hairline {
+  height: 1px;
+  width: 100%;
+  background: #353539;
+}
+
+/* Rainbow hairline — the canonical landing brand gradient */
+.rainbow-rule {
+  height: 2px;
+  background: linear-gradient(90deg, #fc6756, #f8cf3e 38%, #26f4d0 52%, #724ce8);
+}
+
+/*
+ * Signature landing-page title bracket: a thin rainbow stroke that wraps the
+ * top-left of a heading (purple -> teal), recreating .hero-heding-top-stroke.
+ * Built with the padding-box / border-box gradient-border technique so it
+ * scales to any heading size.
+ */
+.title-frame {
+  border: 0 solid transparent;
+  border-top-width: 2px;
+  border-left-width: 2px;
+  border-top-left-radius: 22px;
+  padding: 1.1rem 0 0 1.4rem;
+  background:
+    linear-gradient(#0a090f, #0a090f) padding-box,
+    linear-gradient(125deg, #724ce8 0%, #26f4d0 100%) border-box;
+}
+
+/* Companion bottom-right bracket (teal -> yellow -> coral), recreating the lower stroke */
+.title-frame-br {
+  border: 0 solid transparent;
+  border-bottom-width: 2px;
+  border-right-width: 2px;
+  border-bottom-right-radius: 22px;
+  padding: 0 1.4rem 1.1rem 0;
+  background:
+    linear-gradient(#0a090f, #0a090f) padding-box,
+    linear-gradient(125deg, #26f4d0 0%, #f8cf3e 55%, #fc6756 100%) border-box;
+}
+
+/* Crisp HUD box — 1px #353539 border like the landing's framed panels */
+.hud-box {
+  border: 1px solid #353539;
+  background: #09090e;
 }
 
 .react-flow__node {
@@ -25,6 +119,6 @@ body {
 }
 
 .react-flow__attribution {
-  background: rgba(15, 23, 42, 0.75) !important;
-  color: #94a3b8 !important;
+  background: rgba(10, 9, 15, 0.75) !important;
+  color: #858580 !important;
 }

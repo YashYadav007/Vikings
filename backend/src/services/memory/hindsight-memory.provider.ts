@@ -97,6 +97,7 @@ export class HindsightMemoryProvider implements MemoryProvider {
                 title: draft.title,
                 relatedFiles: draft.relatedFiles,
                 tags: draft.tags ?? this.toTags(projectId, draft),
+                memoryKey: draft.memoryKey,
                 source: "devcontext-os",
                 projectId,
                 createdAt,
@@ -168,6 +169,10 @@ export class HindsightMemoryProvider implements MemoryProvider {
     }
 
     return this.config.fallbackProvider.list(projectId);
+  }
+
+  clearProject(projectId: ProjectId): number {
+    return this.config.fallbackProvider.clearProject(projectId);
   }
 
   async reflect(projectId: ProjectId, query: string, context?: unknown): Promise<MemoryReflection> {
@@ -270,6 +275,7 @@ export class HindsightMemoryProvider implements MemoryProvider {
         this.asString(item.created_at) ??
         new Date().toISOString(),
       score,
+      memoryKey: this.asString(metadata.memoryKey),
     };
   }
 
@@ -448,6 +454,7 @@ export class HindsightMemoryProvider implements MemoryProvider {
   }
 
   private isEquivalentMemory(memory: Memory, draft: MemoryDraft): boolean {
+    if (memory.memoryKey && draft.memoryKey && memory.memoryKey === draft.memoryKey) return true;
     return `${memory.type}|${this.normalize(memory.title)}|${this.normalize(memory.content)}` ===
       `${draft.type}|${this.normalize(draft.title)}|${this.normalize(draft.content)}`;
   }

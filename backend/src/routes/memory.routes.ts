@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { LocalMemoryService } from "../services/local-memory.service";
+import { MemoryQualityService } from "../services/memory/memory-quality.service";
 
 const projectParamSchema = z.object({
   projectId: z.string().min(1),
@@ -30,7 +31,7 @@ const memoryReflectSchema = z.object({
   context: z.unknown().optional(),
 });
 
-export function createMemoryRouter(memoryService: LocalMemoryService): Router {
+export function createMemoryRouter(memoryService: LocalMemoryService, memoryQuality = new MemoryQualityService()): Router {
   const router = Router();
 
   router.get("/provider/status", (_req, res) => {
@@ -97,10 +98,12 @@ export function createMemoryRouter(memoryService: LocalMemoryService): Router {
     try {
       const params = projectParamSchema.parse(req.params);
       const memories = await memoryService.list(params.projectId);
-      const byType = (type: string) => memories.filter((memory) => memory.type === type);
+      const report = memoryQuality.qualityReport(params.projectId, memoryService.providerName, memories);
+      const usefulMemories = report.recommendedKeep;
+      const byType = (type: string) => usefulMemories.filter((memory) => memory.type === type);
       const fileCounts = new Map<string, number>();
 
-      for (const memory of memories) {
+      for (const memory of usefulMemories) {
         for (const file of memory.relatedFiles) {
           fileCounts.set(file, (fileCounts.get(file) ?? 0) + 1);
         }
@@ -110,16 +113,30 @@ export function createMemoryRouter(memoryService: LocalMemoryService): Router {
         projectId: params.projectId,
         provider: memoryService.providerName,
         memoryCount: memories.length,
+        usefulCount: report.recommendedKeep.length,
+        noisyCount: report.noisyMemories.length,
+        duplicateCount: report.duplicateGroups.reduce((total, group) => total + group.count - 1, 0),
         recentTasks: byType("task").slice(-5),
         decisions: byType("decision").slice(-8),
         risks: byType("risk").slice(-8),
         preferences: byType("preference").slice(-8),
-        followUps: memories.filter((memory) => /follow[- ]?up|todo|next/i.test(`${memory.title} ${memory.content}`)).slice(-8),
+        followUps: usefulMemories.filter((memory) => memory.type === "follow-up" || /follow[- ]?up|todo|next/i.test(`${memory.title} ${memory.content}`)).slice(-8),
+        architecture: report.latestArchitectureMemory ? [report.latestArchitectureMemory] : [],
         topFilesMentioned: [...fileCounts.entries()]
           .sort((a, b) => b[1] - a[1])
           .slice(0, 10)
           .map(([filePath, count]) => ({ filePath, count })),
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/:projectId/quality-report", async (req, res, next) => {
+    try {
+      const params = projectParamSchema.parse(req.params);
+      const memories = await memoryService.list(params.projectId);
+      res.json(memoryQuality.qualityReport(params.projectId, memoryService.providerName, memories));
     } catch (error) {
       next(error);
     }

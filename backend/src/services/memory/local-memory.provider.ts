@@ -145,6 +145,7 @@ export class LocalMemoryProvider implements MemoryProvider {
   }
 
   private isEquivalentMemory(memory: Memory, draft: MemoryDraft): boolean {
+    if (memory.memoryKey && draft.memoryKey && memory.memoryKey === draft.memoryKey) return true;
     return this.memoryKey(memory) === this.memoryKey(draft);
   }
 

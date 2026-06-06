@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Hindsight AI - Persistent Memory-Powered RAG LLM Workspace</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Hindsight AI is an agentic coding assistant and RAG LLM engine that builds a persistent memory-powered brain for each repository." />
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/font/lucide.min.css" />
+
+    <style>
+        :root {
+            --bg-color: #030014;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --primary-glow: radial-gradient(circle, rgba(114, 76, 232, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+            --accent-glow: radial-gradient(circle, rgba(38, 244, 208, 0.1) 0%, rgba(0, 0, 0, 0) 70%);
+            
+            --color-primary: #724ce8;
+            --color-accent: #26f4d0;
+            --color-warning: #f8cf3e;
+            --color-danger: #fc6756;
+            
+            --text-main: #f3f1fe;
+            --text-muted: #a19bb8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* Ambient Glow Backdrops */
+        .ambient-glow {
+            position: absolute;
+            width: 800px;
+            height: 800px;
+            background: var(--primary-glow);
+            top: -200px;
+            left: -200px;
+            z-index: -1;
+            pointer-events: none;
+            filter: blur(80px);
+        }
+
+        .ambient-glow-right {
+            position: absolute;
+            width: 800px;
+            height: 800px;
+            background: var(--accent-glow);
+            top: 200px;
+            right: -200px;
+            z-index: -1;
+            pointer-events: none;
+            filter: blur(80px);
+        }
+
+        /* Navigation */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 10;
+        }
+
+        .logo {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: -1px;
+            background: linear-gradient(135deg, #fff 30%, var(--text-muted) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo span {
+            background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-primary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        nav {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        nav a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: color 0.3s;
+            font-weight: 500;
+        }
+
+        nav a:hover {
+            color: var(--text-main);
+        }
+
+        /* Buttons */
+        .btn {
+            background: transparent;
+            border: 1px solid var(--card-border);
+            color: var(--text-main);
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--color-primary) 0%, rgba(114, 76, 232, 0.8) 100%);
+            border: none;
+            box-shadow: 0 4px 20px rgba(114, 76, 232, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(114, 76, 232, 0.5);
+            filter: brightness(1.1);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        /* Hero Section */
+        .hero {
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            align-items: center;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
+            gap: 4rem;
+            min-height: calc(85vh - 80px);
+            position: relative;
+        }
+
+        @media (max-width: 1024px) {
+            .hero {
+                grid-template-columns: 1fr;
+                text-align: center;
+                padding-top: 2rem;
+            }
+            .hero-right {
+                order: -1;
+            }
+        }
+
+        .hero-left {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .badge {
+            background: rgba(114, 76, 232, 0.1);
+            border: 1px solid rgba(114, 76, 232, 0.2);
+            color: #d1c4e9;
+            padding: 0.35rem 1rem;
+            border-radius: 100px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            width: fit-content;
+        }
+        
+        @media (max-width: 1024px) {
+            .badge {
+                margin: 0 auto;
+            }
+        }
+
+        .badge i {
+            color: var(--color-accent);
+            font-size: 0.8rem;
+        }
+
+        h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 4rem;
+            font-weight: 700;
+            line-height: 1.1;
+            letter-spacing: -2px;
+        }
+
+        @media (max-width: 640px) {
+            h1 {
+                font-size: 2.8rem;
+            }
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-primary) 50%, var(--color-danger) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-desc {
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            max-width: 600px;
+        }
+
+        @media (max-width: 1024px) {
+            .hero-desc {
+                margin: 0 auto;
+            }
+        }
+
+        .cta-group {
+            display: flex;
+            gap: 1rem;
+        }
+
+        @media (max-width: 1024px) {
+            .cta-group {
+                justify-content: center;
+            }
+        }
+
+        /* Robot Showcase Container */
+        .hero-right {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .robot-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 1rem;
+            width: 100%;
+            max-width: 480px;
+            aspect-ratio: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+
+        .robot-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: 24px;
+            padding: 1.5px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(114, 76, 232, 0.2), rgba(38, 244, 208, 0.1));
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+
+        .robot-card video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 16px;
+        }
+
+        .features {
+            max-width: 1400px;
+            margin: 6rem auto;
+            padding: 0 2rem;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 4rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .section-header h2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2.8rem;
+            font-weight: 700;
+        }
+
+        .section-header p {
+            color: var(--text-muted);
+            max-width: 600px;
+            font-size: 1.1rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 2rem;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--card-border);
+            padding: 2.5rem;
+            border-radius: 16px;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(114, 76, 232, 0.3);
+            box-shadow: 0 10px 30px rgba(114, 76, 232, 0.1);
+        }
+
+        .icon-box {
+            width: 50px;
+            height: 50px;
+            border-radius: 10px;
+            background: rgba(114, 76, 232, 0.1);
+            color: var(--color-accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            border: 1px solid rgba(114, 76, 232, 0.2);
+        }
+
+        .feature-card h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 600;
+        }
+
+        .feature-card p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--card-border);
+            padding: 3rem 2rem;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-glow"></div>
+    <div class="ambient-glow-right"></div>
+
+    <header>
+        <div class="logo">
+            <i class="lucide-brain-circuit" style="color: var(--color-accent);"></i> Hindsight<span>AI</span>
+        </div>
+        <nav>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/import" class="btn btn-secondary"><i class="lucide-plus"></i> Import Repo</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="hero-left">
+                <div class="badge">
+                    <i class="lucide-sparkles"></i> Memory-Powered Agentic RAG
+                </div>
+                <h1>The RAG LLM with a <span class="gradient-text">Persistent Brain</span></h1>
+                <p class="hero-desc">
+                    Hindsight AI automatically builds a persistent learning loop for your codebase. It remembers architecture decisions, changes, and risk profiles so your AI agent performs with unmatched accuracy.
+                </p>
+                <div class="cta-group">
+                    <a href="/import" class="btn btn-primary"><i class="lucide-rocket"></i> Import a Repository</a>
+                    <a href="/dashboard" class="btn btn-secondary"><i class="lucide-layout-dashboard"></i> Open Dashboard</a>
+                </div>
+            </div>
+            
+            <div class="hero-right">
+                <div class="robot-card">
+                    <video autoplay loop muted playsinline>
+                        <source src="https://chaingpt-web.s3.us-east-2.amazonaws.com/assets/video/Labs/LABS_robot_SAFARI_HEVC.mp4" type="video/mp4; codecs=hvc1">
+                        <source src="https://chaingpt-web.s3.us-east-2.amazonaws.com/assets/video/Labs/LABS_robot_CHROME_VP9.webm" type="video/webm">
+                    </video>
+                </div>
+            </div>
+        </section>
+
+        <section class="features">
+            <div class="section-header">
+                <h2>Engineered for Codebases</h2>
+                <p>A persistent knowledge store that turns static RAG into an active repository intelligence center.</p>
+            </div>
+            
+            <div class="grid">
+                <div class="feature-card">
+                    <div class="icon-box">
+                        <i class="lucide-database"></i>
+                    </div>
+                    <h3>Persistent Project Brain</h3>
+                    <p>Every repository gets a persistent database slot that accumulates learning logs, developer preferences, and architectural shifts over time.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="icon-box">
+                        <i class="lucide-refresh-cw"></i>
+                    </div>
+                    <h3>Active Learning Loop</h3>
+                    <p>Unlike standard static RAG, Hindsight records execution results, code risk areas, and PR comments to optimize future generations automatically.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="icon-box">
+                        <i class="lucide-git-branch"></i>
+                    </div>
+                    <h3>Git Integration</h3>
+                    <p>Simply import a public GitHub repository. Hindsight indexes structure, builds file-chunk trees, and maps dependencies automatically.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Hindsight AI. Persistent Memory Engine for Autonomous Coding Agents.</p>
+    </footer>
+</body>
+</html>

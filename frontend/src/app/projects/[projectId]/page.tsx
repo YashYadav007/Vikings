@@ -1,18 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { Boxes, Database, History, ShieldAlert } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { Boxes, Database, History, Loader2, ShieldAlert, Trash2, TriangleAlert } from "lucide-react";
 import { BrainTabs } from "@/components/brain-tabs";
 import { ProviderStatusBadge } from "@/components/provider-status";
 import { Card, ErrorState, IconBadge, LoadingState, PageShell } from "@/components/ui";
-import { getProject } from "@/lib/api";
-import type { ProjectBrain } from "@/lib/types";
+import { deleteProject, getProject } from "@/lib/api";
+import type { DeleteProjectResponse, ProjectBrain } from "@/lib/types";
 
 export default function ProjectBrainPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const router = useRouter();
   const [project, setProject] = useState<ProjectBrain | null>(null);
   const [loading, setLoading] = useState(true);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteResult, setDeleteResult] = useState<DeleteProjectResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -22,10 +26,24 @@ export default function ProjectBrainPage() {
       .finally(() => setLoading(false));
   }, [projectId]);
 
+  async function onDelete() {
+    setDeleting(true);
+    setError(null);
+    try {
+      const result = await deleteProject(projectId);
+      setDeleteResult(result);
+      router.push("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <PageShell>
       <BrainTabs projectId={projectId} />
-      {loading ? <div className="mt-6"><LoadingState label="Loading Project Brain..." /></div> : null}
+      {loading ? <div className="mt-6"><LoadingState label="Loading Vikings Brain..." /></div> : null}
       {error ? <div className="mt-6"><ErrorState message={error} /></div> : null}
       {project ? (
         <div className="mt-6 space-y-5">
@@ -41,6 +59,25 @@ export default function ProjectBrainPage() {
             </div>
             <ProviderStatusBadge />
           </div>
+
+          {project.id !== "demo-shopease" ? (
+            <Card className="border-red-400/20 bg-red-950/10">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Advanced</h2>
+                  <p className="mt-1 text-sm text-slate-400">Delete this imported project, its local cache, RAG chunks, tasks, and local runtime memories.</p>
+                </div>
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="inline-flex min-h-10 items-center gap-2 rounded-md border border-red-400/30 bg-red-950/20 px-3 text-sm font-semibold text-red-100 hover:bg-red-950/30"
+                >
+                  <Trash2 size={16} />
+                  Delete Project
+                </button>
+              </div>
+              {deleteResult?.warnings.length ? <p className="mt-3 text-sm text-amber-100">{deleteResult.warnings.join(" ")}</p> : null}
+            </Card>
+          ) : null}
 
           <div className="grid gap-4 md:grid-cols-4">
             <Metric icon={Boxes} label="Modules" value={project.modules.length} />
@@ -86,6 +123,39 @@ export default function ProjectBrainPage() {
               </div>
             </Card>
           </div>
+        </div>
+      ) : null}
+      {confirmDelete && project ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4">
+          <Card className="w-full max-w-lg border-red-400/30 bg-slate-950">
+            <div className="flex items-start gap-3">
+              <TriangleAlert className="mt-1 text-red-300" size={22} />
+              <div>
+                <h2 className="text-xl font-semibold text-white">Delete this project and its indexed RAG data?</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                  This removes local project cache, RAG chunks, generated tasks, and local runtime memories for{" "}
+                  <span className="font-semibold text-white">{project.name}</span>.
+                </p>
+                <p className="mt-2 break-all text-xs text-slate-500">{project.repoUrl}</p>
+              </div>
+            </div>
+            <div className="mt-5 flex flex-wrap justify-end gap-3">
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="inline-flex min-h-10 items-center rounded-md border border-workspace-border bg-white/5 px-4 text-sm font-semibold text-slate-200 hover:bg-white/10"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onDelete}
+                disabled={deleting}
+                className="inline-flex min-h-10 items-center gap-2 rounded-md bg-red-500 px-4 text-sm font-semibold text-white hover:bg-red-400 disabled:opacity-70"
+              >
+                {deleting ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                Delete Project
+              </button>
+            </div>
+          </Card>
         </div>
       ) : null}
     </PageShell>

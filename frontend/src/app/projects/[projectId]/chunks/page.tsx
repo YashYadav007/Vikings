@@ -26,7 +26,7 @@ export default function ChunksPage() {
       <BrainTabs projectId={projectId} />
       <div className="mt-6">
         <h1 className="text-3xl font-semibold text-white">RAG Chunks</h1>
-        <p className="mt-2 text-slate-400">Indexed codebase knowledge available to DevContext AI.</p>
+        <p className="mt-2 text-slate-400">Indexed codebase knowledge available to Agent Vikings.</p>
       </div>
 
       {loading ? <div className="mt-5"><LoadingState label="Loading chunks..." /></div> : null}
