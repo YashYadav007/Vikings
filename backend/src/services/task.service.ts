@@ -29,6 +29,7 @@ export class TaskService {
       memoriesUsedCount: answer.rawMemoriesUsed.length,
       patchPreview: answer.patchPreview.map((patch) => ({
         ...patch,
+        status: "modified",
         originalContentSnippet: "",
         newContent: "",
         risk: "Review generated patch before applying.",

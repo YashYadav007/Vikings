@@ -108,7 +108,7 @@ export default function DashboardPage() {
 function ProjectCard({ project, index }: { project: ProjectBrain; index: number }) {
   return (
     <Link
-      href={`/projects/${project.id}`}
+      href={`/projects/${project.id}/task`}
       className="group relative block animate-fade-up"
       style={{ animationDelay: `${Math.min(index * 60, 300)}ms` }}
     >

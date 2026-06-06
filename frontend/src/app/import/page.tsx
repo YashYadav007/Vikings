@@ -119,10 +119,10 @@ export default function ImportPage() {
                 <p className="mt-1 truncate font-mono text-xs text-cream/40">{result.project.repoUrl}</p>
               </div>
               <Link
-                href={`/projects/${result.project.id}`}
+                href={`/projects/${result.project.id}/task`}
                 className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-md border border-brand-orange bg-brand-orange px-5 py-2 font-sans text-[0.82rem] font-semibold text-ink-900 transition-all hover:bg-transparent hover:text-brand-orange hover:shadow-glow-orange"
               >
-                Open Project Brain
+                Run First Task
                 <ArrowRight size={16} />
               </Link>
             </div>

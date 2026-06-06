@@ -43,8 +43,8 @@ export default function ChatComparePage() {
     <PageShell>
       <BrainTabs projectId={projectId} />
       <div className="mt-6">
-        <h1 className="text-3xl font-semibold text-white">Chat Compare</h1>
-        <p className="mt-2 text-slate-400">Compare a generic answer against DevContext AI with project memory and RAG evidence.</p>
+        <h1 className="text-3xl font-semibold text-white">Compare Mode (Debug)</h1>
+        <p className="mt-2 text-slate-400">Debug the difference between generic AI and DevContext AI. Use the Task tab for the primary coding-agent workflow.</p>
       </div>
 
       <Card className="mt-5">

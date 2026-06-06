@@ -17,11 +17,12 @@ export function createGraphRouter(
   router.get("/:projectId", async (req, res, next) => {
     try {
       const project = await projectService.getProject(req.params.projectId);
-      const [memories, tasks] = await Promise.all([
+      const [memories, tasks, chunks] = await Promise.all([
         memoryService.list(req.params.projectId),
         Promise.resolve(taskService.list(req.params.projectId)),
+        ragService.listChunks(req.params.projectId),
       ]);
-      res.json(graphService.getProjectGraph(project, memories, tasks, ragService.listChunks(req.params.projectId)));
+      res.json(graphService.getProjectGraph(project, memories, tasks, chunks));
     } catch (error) {
       next(error);
     }

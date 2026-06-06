@@ -5,6 +5,7 @@ import { AgentExecutionService } from "../services/agent-execution.service";
 const executeSchema = z.object({
   projectId: z.string().min(1),
   message: z.string().min(1),
+  mode: z.enum(["safe-auto", "preview-only"]).optional(),
 });
 
 export function createAgentRouter(agentExecutionService: AgentExecutionService): Router {

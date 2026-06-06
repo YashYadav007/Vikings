@@ -21,7 +21,10 @@ Routes implemented:
 - `/dashboard`
 - `/import`
 - `/projects/[projectId]`
+- `/projects/[projectId]/task`
 - `/projects/[projectId]/chat`
 - `/projects/[projectId]/graph`
 - `/projects/[projectId]/memory`
 - `/projects/[projectId]/chunks`
+
+The primary project workflow is `/projects/[projectId]/task`. It calls `POST /api/tasks/run` and shows agent provider, memory/RAG provider status, memory influence, patch preview, apply/PR result, incremental RAG update, and saved Hindsight memories. Compare mode remains available as `Compare Mode (Debug)`.

@@ -1,4 +1,4 @@
-export type MemoryType = "bug" | "decision" | "style" | "risk" | "preference" | "task" | "architecture";
+export type MemoryType = "bug" | "decision" | "style" | "risk" | "preference" | "task" | "architecture" | "follow-up";
 
 export type ProjectModule = {
   id: string;
@@ -54,8 +54,12 @@ export type Memory = {
 
 export type PatchPreview = {
   filePath: string;
+  status?: "added" | "modified" | "deleted";
   changeSummary: string;
   diff: string;
+  originalContentSnippet?: string;
+  newContent?: string;
+  risk?: string;
 };
 
 export type MemoryDraft = {
@@ -76,6 +80,50 @@ export type CompareResponse = {
   memoryToSave: MemoryDraft[];
 };
 
+export type IncrementalRagUpdate = {
+  provider: "local" | "pgvector";
+  semanticIndex: boolean;
+  filesUpdated: number;
+  filesDeleted: number;
+  chunksInserted: number;
+  warnings: string[];
+};
+
+export type TaskRunResponse = {
+  mode: "safe-auto" | "preview-only";
+  agentProvider: "llm" | "mock" | "claude-code";
+  memoryProvider?: "local" | "hindsight";
+  memoryFallbackUsed?: boolean;
+  ragProvider?: "local" | "pgvector";
+  semanticSearch?: boolean;
+  ragFallbackUsed?: boolean;
+  memoryInfluence: string;
+  plan: string;
+  task: {
+    id: string;
+    status: string;
+    prUrl?: string;
+  };
+  memoriesUsed: Memory[];
+  chunksUsed: RagChunk[];
+  patchPreview: PatchPreview[];
+  testsToRun: string[];
+  risks: string[];
+  suggestedMemories?: MemoryDraft[];
+  applyResult?: {
+    success: boolean;
+    branchName?: string;
+    commitSha?: string;
+    prUrl?: string;
+    memoryRetained?: boolean;
+    memoryProvider?: "local" | "hindsight";
+    memoryFallbackUsed?: boolean;
+    incrementalRagUpdate?: IncrementalRagUpdate;
+  } | null;
+  incrementalRagUpdate?: IncrementalRagUpdate | null;
+  savedMemories?: Memory[];
+};
+
 export type ImportResponse = {
   project: ProjectBrain;
   importSummary: {
@@ -94,6 +142,38 @@ export type ProviderStatus = {
   hindsightConfigured: boolean;
   fallbackMode: string;
   bankIdExample: string;
+};
+
+export type SystemStatus = {
+  backend: "ok";
+  memory: {
+    provider: "local" | "hindsight";
+    configuredProvider: string;
+    hindsightConfigured: boolean;
+    fallbackMode: string;
+  };
+  rag: {
+    provider: "local" | "pgvector";
+    configuredProvider: string;
+    pgvectorConfigured: boolean;
+    supabaseConfigured: boolean;
+    embeddingConfigured: boolean;
+    fallbackMode: string;
+  };
+  llm: {
+    mockMode: boolean;
+    openaiConfigured: boolean;
+  };
+  github: {
+    tokenConfigured: boolean;
+    mockWrite: boolean;
+  };
+  agent?: {
+    provider: "llm" | "mock" | "claude-code";
+    configuredProvider: string;
+    model: string;
+    claudeCodeEnabled: boolean;
+  };
 };
 
 export type GraphNode = {

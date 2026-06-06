@@ -44,12 +44,13 @@ export function getMemoryProviderStatus(activeProvider: MemoryProvider["name"]):
   const configuredProvider = process.env.MEMORY_PROVIDER ?? "local";
   const fallbackMode = process.env.HINDSIGHT_FALLBACK_MODE ?? "local";
   const projectPrefix = process.env.HINDSIGHT_PROJECT_PREFIX ?? DEFAULT_PROJECT_PREFIX;
+  const sessionId = process.env.HINDSIGHT_DEMO_SESSION_ID?.trim();
 
   return {
     activeProvider,
     configuredProvider,
     hindsightConfigured: Boolean(process.env.HINDSIGHT_API_URL && process.env.HINDSIGHT_API_KEY),
     fallbackMode,
-    bankIdExample: `${projectPrefix}:demo-shopease`,
+    bankIdExample: sessionId ? `${projectPrefix}:${sessionId}:demo-shopease` : `${projectPrefix}:demo-shopease`,
   };
 }

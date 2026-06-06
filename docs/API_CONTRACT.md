@@ -6,7 +6,7 @@ Base URL:
 http://localhost:4000
 ```
 
-Existing Sprint 1-4 response shapes remain compatible. Sprint 5 adds safe agent execution and approved patch apply APIs.
+Existing Sprint 1-5 response shapes remain compatible. Sprint 6 adds semantic RAG provider status, system status, and Hindsight verification APIs.
 
 ## Health And Projects
 
@@ -68,11 +68,17 @@ Response:
     "filesIndexed": 1,
     "chunksCreated": 1,
     "memoryRetained": true,
+    "memoryProvider": "local",
+    "memoryFallbackUsed": false,
     "projectReused": false,
+    "ragProvider": "local",
+    "semanticIndex": false,
     "warnings": []
   }
 }
 ```
+
+`project.architecture` and the initial architecture memory use provider-aware wording. pgvector imports say `Indexed X semantic RAG chunks using Supabase pgvector`; local imports say `Indexed X local RAG chunks for keyword search`.
 
 Re-importing the same repo reuses the same project ID, refreshes metadata/chunks, and skips duplicate architecture memory. On the second import `importSummary.projectReused` is `true`; `memoryRetained` is `false` if the equivalent architecture memory already exists.
 
@@ -90,7 +96,29 @@ Response:
 
 ```json
 {
-  "chunks": []
+  "chunks": [],
+  "provider": "local",
+  "semanticSearch": false
+}
+```
+
+Provider status:
+
+```bash
+curl http://localhost:4000/api/rag/provider/status
+```
+
+Response:
+
+```json
+{
+  "configuredProvider": "pgvector",
+  "activeProvider": "local",
+  "pgvectorConfigured": false,
+  "supabaseConfigured": false,
+  "embeddingConfigured": false,
+  "fallbackMode": "local",
+  "embeddingModel": "text-embedding-3-small"
 }
 ```
 
@@ -131,6 +159,29 @@ curl http://localhost:4000/api/memory/demo-shopease
 curl http://localhost:4000/api/memory/:projectId
 ```
 
+Verify provider retain/recall/reflect:
+
+```bash
+curl -X POST http://localhost:4000/api/memory/provider/verify \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"demo-shopease"}'
+```
+
+Response:
+
+```json
+{
+  "provider": "local",
+  "bankId": "devcontext:demo-shopease",
+  "retainOk": true,
+  "recallOk": true,
+  "reflectOk": true,
+  "recalledCount": 1,
+  "fallbackUsed": false,
+  "error": null
+}
+```
+
 Recall:
 
 ```bash
@@ -146,6 +197,8 @@ curl -X POST http://localhost:4000/api/memory/retain \
   -H 'Content-Type: application/json' \
   -d '{"projectId":"demo-shopease","memory":{"type":"decision","title":"Coupon calculation order","content":"Apply coupon after quantity normalization","relatedFiles":["src/lib/cartService.ts"]}}'
 ```
+
+Hindsight metadata is provider-normalized before retain: arrays/objects such as `relatedFiles` and `tags` are stringified for Hindsight, while DevContext API responses keep `relatedFiles` as arrays. If Hindsight retain fails and local fallback succeeds, responses may include `provider: "local"`, `fallbackUsed: true`, and `fallbackReason: "Hindsight retain failed"`.
 
 Reflect:
 
@@ -182,6 +235,18 @@ curl -X POST http://localhost:4000/api/chat/compare \
 ```
 
 Compare response keeps old fields and includes optional `memoryProvider`, `canExecute`, and `executeEndpoint`.
+
+Sprint 6.1 also adds optional RAG metadata without removing existing fields:
+
+```json
+{
+  "ragProvider": "pgvector",
+  "semanticSearch": true,
+  "ragFallbackUsed": false
+}
+```
+
+For architecture/explain prompts, chat enriches the RAG query and falls back to top indexed chunks when provider search returns no direct matches.
 
 ## Agent Execution
 
@@ -228,7 +293,17 @@ Success:
   "branchName": "devcontext/add-coupon-discount-support-12345678",
   "commitSha": "mock-commit",
   "prUrl": "https://github.com/mock/repo/pull/devcontext-mock",
-  "memoryRetained": true
+  "memoryRetained": true,
+  "memoryProvider": "hindsight",
+  "memoryFallbackUsed": false,
+  "incrementalRagUpdate": {
+    "provider": "pgvector",
+    "semanticIndex": true,
+    "filesUpdated": 1,
+    "filesDeleted": 0,
+    "chunksInserted": 3,
+    "warnings": []
+  }
 }
 ```
 
@@ -251,10 +326,147 @@ curl http://localhost:4000/api/tasks/:projectId
 curl http://localhost:4000/api/tasks/:projectId/:taskId
 ```
 
+Run the primary coding-agent workflow:
+
+```bash
+curl -X POST http://localhost:4000/api/tasks/run \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"demo-shopease","message":"Improve README setup instructions","mode":"safe-auto"}'
+```
+
+Response includes existing task fields plus provider and learning-loop evidence:
+
+```json
+{
+  "agentProvider": "llm",
+  "memoryProvider": "hindsight",
+  "memoryFallbackUsed": false,
+  "ragProvider": "pgvector",
+  "semanticSearch": true,
+  "memoryInfluence": "...",
+  "memoriesUsed": [],
+  "chunksUsed": [],
+  "patchPreview": [],
+  "applyResult": {},
+  "incrementalRagUpdate": {},
+  "savedMemories": []
+}
+```
+
+## Learning Loop
+
+Approved patch apply updates only changed file chunks in RAG. It does not re-index the full repo. Hindsight receives concise durable learning, not raw full code.
+
+Learning summary:
+
+```bash
+curl http://localhost:4000/api/memory/:projectId/learning-summary
+```
+
+Response:
+
+```json
+{
+  "projectId": "demo-shopease",
+  "provider": "local",
+  "memoryCount": 10,
+  "recentTasks": [],
+  "decisions": [],
+  "risks": [],
+  "preferences": [],
+  "followUps": [],
+  "topFilesMentioned": []
+}
+```
+
+File-scoped chunks:
+
+```bash
+curl 'http://localhost:4000/api/rag/:projectId/file-chunks?filePath=README.md'
+```
+
+Response:
+
+```json
+{
+  "projectId": "demo-shopease",
+  "filePath": "README.md",
+  "chunks": []
+}
+```
+
+Future `POST /api/agent/execute` plans include `Memory influence` when recalled memories exist.
+
+`POST /api/agent/execute` now uses the same coding-agent provider as `/api/tasks/run`, but remains preview-oriented for existing frontend compatibility.
+
+## System Status
+
+```bash
+curl http://localhost:4000/api/system/status
+```
+
+Response:
+
+```json
+{
+  "backend": "ok",
+  "memory": {
+    "provider": "local",
+    "configuredProvider": "local",
+    "hindsightConfigured": false,
+    "fallbackMode": "local"
+  },
+  "rag": {
+    "provider": "local",
+    "configuredProvider": "local",
+    "pgvectorConfigured": false,
+    "supabaseConfigured": false,
+    "embeddingConfigured": false,
+    "fallbackMode": "local"
+  },
+  "llm": {
+    "mockMode": true,
+    "openaiConfigured": false
+  },
+  "github": {
+    "tokenConfigured": false,
+    "mockWrite": true
+  },
+  "deployment": {
+    "nodeEnv": "development",
+    "timestamp": "2026-06-05T00:00:00.000Z"
+  }
+}
+```
+
+## Context Debug
+
+```bash
+curl http://localhost:4000/api/projects/:projectId/context-debug
+```
+
+Response:
+
+```json
+{
+  "projectId": "github-owner-repo",
+  "projectArchitecture": "...",
+  "ragProviderStatus": {},
+  "chunkCountFromProject": 44,
+  "chunkCountFromProvider": 44,
+  "topChunksPreview": [],
+  "memoryProvider": "hindsight",
+  "recalledArchitectureMemories": []
+}
+```
+
+This endpoint is for local/demo debugging and helps confirm chat, graph, and memory are looking at the expected provider context.
+
 ## Persistence
 
 - Imported projects: `backend/.data/projects.json`
 - Imported RAG chunks: `backend/.data/rag-chunks.json`
+- Semantic RAG chunks: Supabase `code_chunks` table when `RAG_PROVIDER=pgvector`
 - Retained memories: `backend/.data/runtime-memories.json`
 - Generated tasks: `backend/.data/tasks.json`
 

@@ -29,6 +29,23 @@ interface HindsightMemoryLike {
   createdAt?: string;
 }
 
+export function normalizeHindsightMetadata(input: Record<string, unknown>): Record<string, string | number | boolean> {
+  const normalized: Record<string, string | number | boolean> = {};
+
+  for (const [key, value] of Object.entries(input)) {
+    if (value === undefined || value === null) continue;
+
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      normalized[key] = value;
+      continue;
+    }
+
+    normalized[key] = JSON.stringify(value);
+  }
+
+  return normalized;
+}
+
 export class HindsightMemoryProvider implements MemoryProvider {
   readonly name = "hindsight" as const;
   private readonly baseUrl: string;
@@ -38,7 +55,8 @@ export class HindsightMemoryProvider implements MemoryProvider {
   }
 
   getBankId(projectId: ProjectId): string {
-    return `${this.config.projectPrefix}:${projectId}`;
+    const sessionId = process.env.HINDSIGHT_DEMO_SESSION_ID?.trim();
+    return sessionId ? `${this.config.projectPrefix}:${sessionId}:${projectId}` : `${this.config.projectPrefix}:${projectId}`;
   }
 
   async ensureBank(_projectId: ProjectId): Promise<void> {
@@ -73,25 +91,32 @@ export class HindsightMemoryProvider implements MemoryProvider {
               }.`,
               timestamp: createdAt,
               source: "devcontext-os",
-              tags: this.toTags(projectId, draft),
-              metadata: {
+              tags: this.toTags(projectId, draft).join(", "),
+              metadata: normalizeHindsightMetadata({
                 type: draft.type,
                 title: draft.title,
                 relatedFiles: draft.relatedFiles,
+                tags: draft.tags ?? this.toTags(projectId, draft),
                 source: "devcontext-os",
                 projectId,
                 createdAt,
-              },
+              }),
             },
           ],
         }),
       });
 
       await this.config.fallbackProvider.retain(projectId, draft);
-      return normalized;
+      return { ...normalized, provider: "hindsight", fallbackUsed: false };
     } catch (error) {
       this.warnAndFallback("retain", error);
-      return this.config.fallbackProvider.retain(projectId, draft);
+      const fallbackMemory = await this.config.fallbackProvider.retain(projectId, draft);
+      return {
+        ...fallbackMemory,
+        provider: "local",
+        fallbackUsed: true,
+        fallbackReason: "Hindsight retain failed",
+      };
     }
   }
 
@@ -146,13 +171,25 @@ export class HindsightMemoryProvider implements MemoryProvider {
   }
 
   async reflect(projectId: ProjectId, query: string, context?: unknown): Promise<MemoryReflection> {
+    const recalledMemories = await this.recall(projectId, query, 5);
+    const fallbackReflection = this.structuredReflection(projectId, query, context, recalledMemories);
+
     try {
       await this.ensureBank(projectId);
       const response = await this.request(`/v1/default/banks/${encodeURIComponent(this.getBankId(projectId))}/reflect`, {
         method: "POST",
         body: JSON.stringify({
           query,
-          context: typeof context === "string" ? context : JSON.stringify(context ?? {}),
+          context: JSON.stringify({
+            query,
+            userContext: context ?? {},
+            recalledMemories: recalledMemories.map((memory) => ({
+              type: memory.type,
+              title: memory.title,
+              content: memory.content,
+              relatedFiles: memory.relatedFiles,
+            })),
+          }),
           budget: "low",
         }),
       });
@@ -163,14 +200,27 @@ export class HindsightMemoryProvider implements MemoryProvider {
         this.asString(responseRecord.reflection) ??
         "Hindsight returned a reflection without text.";
 
+      if (this.isWeakReflection(reflection)) {
+        return {
+          provider: "hindsight",
+          ...fallbackReflection,
+          fallbackReflectionUsed: true,
+        };
+      }
+
       return {
         provider: "hindsight",
         reflection,
-        suggestedMemories: this.localSuggestedMemories(context),
+        suggestedMemories: fallbackReflection.suggestedMemories,
+        fallbackReflectionUsed: false,
       };
     } catch (error) {
       this.warnAndFallback("reflect", error);
-      return this.config.fallbackProvider.reflect(projectId, query, context);
+      return {
+        provider: "hindsight",
+        ...fallbackReflection,
+        fallbackReflectionUsed: true,
+      };
     }
   }
 
@@ -204,9 +254,7 @@ export class HindsightMemoryProvider implements MemoryProvider {
 
     const type = this.normalizeType(this.asString(metadata.type) ?? this.asString(item.type));
     const title = this.asString(metadata.title) ?? this.asString(item.title) ?? content.slice(0, 72);
-    const relatedFiles = Array.isArray(metadata.relatedFiles)
-      ? metadata.relatedFiles.filter((file): file is string => typeof file === "string")
-      : [];
+    const relatedFiles = this.parseRelatedFiles(metadata.relatedFiles);
     const score = item.score ?? item.similarity ?? keywordScore(query, [title, content, relatedFiles.join(" ")]);
 
     return {
@@ -238,7 +286,30 @@ export class HindsightMemoryProvider implements MemoryProvider {
   }
 
   private toTags(projectId: ProjectId, draft: MemoryDraft): string[] {
-    return ["devcontext-os", projectId, draft.type, ...draft.relatedFiles.map((file) => `file:${file}`)];
+    return [...new Set(["devcontext-os", projectId, draft.type, ...(draft.tags ?? []), ...draft.relatedFiles.map((file) => `file:${file}`)])];
+  }
+
+  private parseRelatedFiles(value: unknown): string[] {
+    if (Array.isArray(value)) {
+      return value.filter((file): file is string => typeof file === "string");
+    }
+    if (typeof value !== "string" || value.length === 0) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed.filter((file): file is string => typeof file === "string");
+      }
+    } catch {
+      // Hindsight metadata may store relatedFiles as a comma-delimited string.
+    }
+
+    return value
+      .split(",")
+      .map((file) => file.trim())
+      .filter(Boolean);
   }
 
   private extractMemoryArray(response: unknown): HindsightMemoryLike[] {
@@ -292,8 +363,61 @@ export class HindsightMemoryProvider implements MemoryProvider {
     ];
   }
 
+  private structuredReflection(
+    _projectId: ProjectId,
+    query: string,
+    context: unknown,
+    memories: ScoredMemory[],
+  ): Omit<MemoryReflection, "provider"> {
+    const topMemory = memories[0];
+    const files = [
+      ...new Set([
+        ...memories.flatMap((memory) => memory.relatedFiles),
+        ...this.filesFromContext(context),
+      ]),
+    ];
+
+    if (!topMemory) {
+      return {
+        reflection: `No durable memory matched "${query}" yet. Capture the task outcome, files touched, risks, and implementation decisions after the work is complete.`,
+        suggestedMemories: this.localSuggestedMemories(context),
+      };
+    }
+
+    return {
+      reflection: `The project has a durable ${topMemory.type} memory "${topMemory.title}": ${topMemory.content} Future work for "${query}" should preserve this lesson and check related files ${files.join(", ") || "not specified"}.`,
+      suggestedMemories: [
+        {
+          type: topMemory.type === "risk" ? "risk" : "decision",
+          title: `Preserve ${topMemory.title}`,
+          content: `Future work should preserve this remembered context: ${topMemory.content}`,
+          relatedFiles: files,
+        },
+      ],
+    };
+  }
+
+  private filesFromContext(context: unknown): string[] {
+    const record = typeof context === "object" && context !== null ? (context as Record<string, unknown>) : {};
+    return Array.isArray(record.filesTouched) ? record.filesTouched.filter((file): file is string => typeof file === "string") : [];
+  }
+
+  private isWeakReflection(reflection: string): boolean {
+    const normalized = reflection.toLowerCase().trim();
+    return normalized.length < 32 || normalized === "i don't have information." || normalized === "i do not have information.";
+  }
+
   private normalizeType(type?: string): Memory["type"] {
-    if (type === "bug" || type === "decision" || type === "style" || type === "risk" || type === "preference" || type === "task") {
+    if (
+      type === "bug" ||
+      type === "decision" ||
+      type === "style" ||
+      type === "risk" ||
+      type === "preference" ||
+      type === "task" ||
+      type === "architecture" ||
+      type === "follow-up"
+    ) {
       return type;
     }
     if (type === "experience") {

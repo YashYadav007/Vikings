@@ -13,6 +13,9 @@ Rules:
 - Do not give generic coding advice if project context is available.
 - Mention the files/modules likely affected.
 - Mention the memories that influenced your answer.
+- Explicitly list RAG chunks used and Hindsight/project memories used.
+- If memories are present, explain how they changed the answer. Do not ignore them.
+- Surface risks learned from previous tasks before recommending implementation steps.
 - Produce a safe implementation plan before patching.
 - If generating code, show a patch preview and tests to run.
 - After task completion, propose what should be retained into memory.
@@ -28,6 +31,14 @@ export class LlmService {
   constructor() {
     this.useMock = process.env.USE_MOCK_LLM !== "false";
     this.client = !this.useMock && process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+  }
+
+  isMockMode(): boolean {
+    return this.useMock;
+  }
+
+  isOpenAIConfigured(): boolean {
+    return Boolean(process.env.OPENAI_API_KEY);
   }
 
   async generateGenericAnswer(message: string): Promise<string> {
@@ -63,6 +74,8 @@ export class LlmService {
       task: message,
       chunks,
       memories,
+      instruction:
+        "Use the provided RAG chunks and memories. If memories is non-empty, explicitly include the memory titles and describe how they influenced the implementation plan, risks, and patch preview.",
       requiredJsonShape: {
         taskType: "feature",
         answer: "string",
@@ -193,7 +206,13 @@ export class LlmService {
   ): MemoryPoweredAnswer {
     const primaryChunks = chunks.slice(0, 3);
     const files = primaryChunks.map((chunk) => chunk.filePath);
-    const architectureMemory = memories.find((memory) => memory.type === "architecture");
+    const topMemories = memories.slice(0, 3);
+    const memorySignal =
+      topMemories.length > 0
+        ? `Recalled project memories: ${topMemories
+            .map((memory) => `${memory.title} (${memory.type}) means ${memory.content}`)
+            .join(" ")}`
+        : "No project memories were recalled for this task, so preserve the existing architecture and retain any durable decision after implementation.";
 
     return {
       taskType: "analysis",
@@ -202,9 +221,7 @@ export class LlmService {
         primaryChunks.length > 0
           ? `The most relevant indexed files are ${files.join(", ")}.`
           : "No indexed chunks matched strongly, so start from the project summary and README if available.",
-        architectureMemory
-          ? `The architecture memory says: ${architectureMemory.content}`
-          : "No durable architecture memory was recalled yet.",
+        memorySignal,
       ].join(" "),
       filesUsed: primaryChunks.map((chunk) => ({
         path: chunk.filePath,
