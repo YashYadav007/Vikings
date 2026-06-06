@@ -119,13 +119,51 @@ Request:
 
 ```json
 {
-  "repoUrl": "https://github.com/owner/repo"
+  "repoUrl": "https://github.com/owner/repo",
+  "forceReindex": false
 }
 ```
 
 The response returns `project` and `importSummary`. Store `project.id` in frontend state, then call the existing project brain, graph, memory, RAG debug, and chat APIs with that ID.
 
-Re-importing the same repo is idempotent. The second response includes `importSummary.projectReused: true`; duplicate architecture memory is skipped.
+Re-importing the same repo is cache-first. The second response includes `importSummary.projectReused: true`, `cacheHit: true`, `reindexed: false`, and `embeddingsGenerated: 0`. Duplicate architecture memory is skipped. Show this as “Project already indexed. Opening cached Project Brain.”
+
+Force re-index:
+
+```json
+{
+  "repoUrl": "https://github.com/owner/repo",
+  "forceReindex": true
+}
+```
+
+Use this only from an explicit advanced button.
+
+Sync existing project:
+
+```http
+POST /api/repos/:projectId/sync
+```
+
+Request:
+
+```json
+{
+  "forceReindex": false
+}
+```
+
+Show `syncSkipped`, `filesReindexed`, `filesSkippedUnchanged`, `embeddingsGenerated`, `embeddingProvider`, and `embeddingModel` in the dashboard/project header. Normal dashboard open should not require the user to paste a repo URL again.
+
+Delete project:
+
+```http
+DELETE /api/projects/:projectId
+```
+
+Dashboard cards should show a destructive Delete button for imported projects. Confirm with the text “Delete this project and its indexed RAG data?” and show the project name/repo URL. After success, remove the card without a page refresh and show cleanup counts/warnings. The project detail page should expose the same action in an advanced/settings area and redirect to `/dashboard` after success.
+
+The backend protects `demo-shopease`. Hindsight remote memories are not deleted when provider delete is unavailable; show the returned warning and recommend changing `HINDSIGHT_DEMO_SESSION_ID` for clean demos.
 
 Architecture text is provider-aware. pgvector imports mention semantic RAG using Supabase pgvector; local imports mention local keyword search. If the visible memory history looks stale in Hindsight demos, change `HINDSIGHT_DEMO_SESSION_ID` on the backend to use a fresh memory bank.
 
@@ -198,6 +236,14 @@ GET /api/memory/:projectId/learning-summary
 ```
 
 Use this to show the product learning loop: recent task memories, decisions, risks, preferences, follow-ups, and top files mentioned.
+
+Memory quality report:
+
+```http
+GET /api/memory/:projectId/quality-report
+```
+
+Memory timeline should default to useful memories from `recommendedKeep`. Keep an all/debug toggle for noisy or duplicate memories. Task result should render `hindsightRetention.retained`, `hindsightRetention.skipped`, and `duplicatesSkipped`.
 
 ## Generated Tasks
 

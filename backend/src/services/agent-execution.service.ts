@@ -1,4 +1,4 @@
-import { ChangedFile, ExecutablePatch, GeneratedTask, IncrementalRagUpdateResult, MemoryDraft, ProjectId } from "../types";
+import { ChangedFile, ExecutablePatch, GeneratedTask, HindsightRetentionReport, IncrementalRagUpdateResult, Memory, MemoryDraft, ProjectId, ScoredMemory } from "../types";
 import { CodingAgentProvider, LearningSummary } from "./coding-agent/coding-agent-provider.interface";
 import { GitHubWriteService } from "./github-write.service";
 import { LocalMemoryService } from "./local-memory.service";
@@ -6,6 +6,7 @@ import { LocalRagService } from "./local-rag.service";
 import { PatchEngineService } from "./patch-engine.service";
 import { ProjectService } from "./project.service";
 import { TaskService } from "./task.service";
+import { MemoryQualityService } from "./memory/memory-quality.service";
 
 export class AgentExecutionService {
   constructor(
@@ -16,13 +17,14 @@ export class AgentExecutionService {
     private readonly patchEngine: PatchEngineService,
     private readonly githubWriteService: GitHubWriteService,
     private readonly codingAgentProvider: CodingAgentProvider,
+    private readonly memoryQuality: MemoryQualityService,
   ) {}
 
   async createExecutionPlan(projectId: ProjectId, message: string) {
     const project = await this.projectService.getProject(projectId);
     const ragContext = await this.ragService.searchProjectContext(project, message);
     const chunksUsed = ragContext.chunks;
-    const memoriesUsed = await this.memoryService.recall(projectId, ragContext.query);
+    const memoriesUsed = this.memoryQuality.filterUseful(await this.memoryService.recall(projectId, ragContext.query, 12), 8) as ScoredMemory[];
     const taskType = this.classifyTask(message);
     const learningSummary = await this.learningSummary(projectId);
     const agentResult = await this.codingAgentProvider.runTask({
@@ -101,6 +103,7 @@ export class AgentExecutionService {
       applyResult,
       incrementalRagUpdate: applyResult.incrementalRagUpdate ?? null,
       savedMemories: applyResult.savedMemories ?? [],
+      hindsightRetention: applyResult.hindsightRetention ?? null,
       memoryProvider: applyResult.memoryProvider ?? this.memoryService.providerName,
       memoryFallbackUsed: Boolean(applyResult.memoryFallbackUsed),
     };
@@ -166,6 +169,7 @@ export class AgentExecutionService {
         memoryProvider: memoryRetainResult.provider,
         memoryFallbackUsed: memoryRetainResult.fallbackUsed,
         savedMemories: memoryRetainResult.savedMemories,
+        hindsightRetention: memoryRetainResult.hindsightRetention,
         incrementalRagUpdate,
       };
     } catch (error) {
@@ -186,12 +190,27 @@ export class AgentExecutionService {
     projectId: ProjectId,
     taskId: string,
     incrementalRagUpdate?: IncrementalRagUpdateResult,
-  ): Promise<{ retained: boolean; provider: "local" | "hindsight"; fallbackUsed: boolean; savedMemories: import("../types").Memory[] }> {
+  ): Promise<{
+    retained: boolean;
+    provider: "local" | "hindsight";
+    fallbackUsed: boolean;
+    savedMemories: Memory[];
+    hindsightRetention: HindsightRetentionReport;
+  }> {
     const task = this.taskService.getTask(projectId, taskId);
-    if (!task) return { retained: false, provider: this.memoryService.providerName, fallbackUsed: false, savedMemories: [] };
+    if (!task) {
+      return {
+        retained: false,
+        provider: this.memoryService.providerName,
+        fallbackUsed: false,
+        savedMemories: [],
+        hindsightRetention: { provider: this.memoryService.providerName, fallbackUsed: false, retained: [], skipped: [], duplicatesSkipped: 0 },
+      };
+    }
     const ragUpdate = incrementalRagUpdate ?? task.incrementalRagUpdate;
+    const existing = await this.memoryService.list(projectId);
 
-    const retainedTaskMemory = await this.memoryService.retain(projectId, {
+    const taskMemory: MemoryDraft = {
       type: "task",
       title: this.taskTitle(task.message),
       content: [
@@ -209,20 +228,51 @@ export class AgentExecutionService {
       ].join("\n"),
       relatedFiles: task.filesTouched ?? [],
       tags: ["task", "patch", "rag-updated", "github-pr"],
-    });
-    let fallbackUsed = Boolean(retainedTaskMemory.fallbackUsed);
-    let provider = retainedTaskMemory.provider ?? this.memoryService.providerName;
-    const savedMemories = [retainedTaskMemory];
+    };
+    const candidates = [taskMemory, ...(task.memoryToSave ?? []), ...this.extractDurableMemories(task, ragUpdate)].filter(
+      (memory) => !this.isRagOnlyMemory(memory),
+    );
+    const selected = this.memoryQuality.selectForTask(candidates, existing);
+    let fallbackUsed = false;
+    let provider = this.memoryService.providerName;
+    const savedMemories: Memory[] = [];
+    const retainedReport: HindsightRetentionReport["retained"] = [];
+    const skippedReport: HindsightRetentionReport["skipped"] = [];
 
-    for (const memory of [...(task.memoryToSave ?? []), ...this.extractDurableMemories(task, ragUpdate)]) {
-      const retained = await this.memoryService.retain(projectId, memory);
+    for (const decision of selected.decisions) {
+      if (!decision.keep) {
+        skippedReport.push({
+          type: decision.candidate.type,
+          title: decision.candidate.title,
+          reason: decision.reason,
+          importance: decision.importance,
+        });
+        continue;
+      }
+      const retained = await this.memoryService.retain(projectId, {
+        ...decision.candidate,
+        memoryKey: decision.normalizedKey,
+      });
       savedMemories.push(retained);
       fallbackUsed = fallbackUsed || Boolean(retained.fallbackUsed);
       if (retained.provider) provider = retained.provider;
+      retainedReport.push({
+        type: decision.candidate.type,
+        title: decision.candidate.title,
+        memoryKey: decision.normalizedKey,
+        importance: decision.importance,
+      });
     }
+    const hindsightRetention: HindsightRetentionReport = {
+      provider,
+      fallbackUsed,
+      retained: retainedReport,
+      skipped: skippedReport,
+      duplicatesSkipped: selected.duplicatesSkipped,
+    };
 
-    this.taskService.updateTask(projectId, taskId, { savedMemories });
-    return { retained: true, provider, fallbackUsed, savedMemories };
+    this.taskService.updateTask(projectId, taskId, { savedMemories, hindsightRetention });
+    return { retained: savedMemories.length > 0, provider, fallbackUsed, savedMemories, hindsightRetention };
   }
 
   private async updateRagAfterApply(
@@ -314,6 +364,10 @@ export class AgentExecutionService {
     }
 
     return memories.slice(0, 4);
+  }
+
+  private isRagOnlyMemory(memory: MemoryDraft): boolean {
+    return /rag index|rag update|semantic chunk|local chunk|indexed \d+|inserted \d+/i.test(`${memory.title} ${memory.content}`) && memory.type !== "task";
   }
 
   private titleFromRisk(risk: string): string {

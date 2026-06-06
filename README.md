@@ -23,6 +23,25 @@ Health check:
 curl http://localhost:4000/health
 ```
 
+## Recommended Low-Cost Hosted Config
+
+Gemini is the recommended real provider for the hosted hackathon demo. OpenAI remains supported, and mock providers remain the no-key local fallback.
+
+```env
+CODING_AGENT_PROVIDER=gemini
+CODING_AGENT_MODEL=gemini-2.0-flash
+GEMINI_API_KEY=
+USE_MOCK_LLM=false
+
+EMBEDDING_PROVIDER=gemini
+EMBEDDING_MODEL=gemini-embedding-2
+EMBEDDING_DIMENSIONS=1536
+RAG_PROVIDER=pgvector
+RAG_FALLBACK_MODE=local
+```
+
+Gemini embeddings are requested at 1536 dimensions to match the existing Supabase `code_chunks.embedding vector(1536)` migration.
+
 ## Current Scope
 
 - Provider-backed RAG: local keyword search by default, optional Supabase pgvector semantic search.
@@ -31,8 +50,8 @@ curl http://localhost:4000/health
 - Optional Hindsight HTTP memory provider with verification endpoint.
 - Local retained memories in `backend/.data/runtime-memories.json`.
 - Local generated task records in `backend/.data/tasks.json`.
-- Mock LLM mode that works without an OpenAI key.
-- Optional OpenAI mode when `USE_MOCK_LLM=false` and `OPENAI_API_KEY` is set.
+- Mock mode that works without LLM keys.
+- Gemini-first coding-agent and embedding providers, with OpenAI still supported.
 - React Flow-compatible graph data for the Project Brain.
 - Safe agent execution and mock/real GitHub apply workflow.
 - Stable frontend API contracts.
@@ -84,7 +103,7 @@ RAG_PROVIDER=local
 RAG_FALLBACK_MODE=local
 ```
 
-Semantic mode:
+Semantic mode with Gemini embeddings:
 
 ```env
 RAG_PROVIDER=pgvector
@@ -92,8 +111,10 @@ RAG_FALLBACK_MODE=local
 SUPABASE_URL=your-url
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 SUPABASE_DB_SCHEMA=public
-OPENAI_API_KEY=your-openai-key
-EMBEDDING_MODEL=text-embedding-3-small
+GEMINI_API_KEY=your-gemini-key
+EMBEDDING_PROVIDER=gemini
+EMBEDDING_MODEL=gemini-embedding-2
+EMBEDDING_DIMENSIONS=1536
 ```
 
 Run `backend/db/migrations/001_pgvector_rag.sql` in the Supabase SQL editor before enabling pgvector. If Supabase or embeddings are missing, the backend falls back to local keyword RAG.
@@ -113,13 +134,53 @@ After an approved agent task, DevContext OS updates only touched files in RAG an
 Debug endpoints:
 
 - `GET /api/memory/:projectId/learning-summary`
+- `GET /api/memory/:projectId/quality-report`
 - `GET /api/rag/:projectId/file-chunks?filePath=README.md`
+
+Hindsight has a memory quality gate. It keeps durable task outcomes, decisions, risks, preferences, follow-ups, and material architecture changes, while rejecting duplicate/noisy operational logs such as standalone RAG indexing events.
 
 ## Coding Agent
 
 The primary endpoint is `POST /api/tasks/run`. The coding-agent provider decides relevant files, plan, patch preview, risks, tests, and suggested Hindsight memories from RAG + Hindsight context.
 
-Use `CODING_AGENT_PROVIDER=mock` for no-key local development, or `CODING_AGENT_PROVIDER=llm`, `CODING_AGENT_MODEL=gpt-4.1-mini`, `USE_MOCK_LLM=false`, and `OPENAI_API_KEY=your-key` for the hosted LLM coding-agent demo. Compare mode remains available as a debug tool.
+Use `CODING_AGENT_PROVIDER=mock` for no-key local development. Use `CODING_AGENT_PROVIDER=gemini`, `CODING_AGENT_MODEL=gemini-2.0-flash`, `USE_MOCK_LLM=false`, and `GEMINI_API_KEY=your-key` for the recommended hosted coding-agent demo. OpenAI remains available with `CODING_AGENT_PROVIDER=openai` or `llm`. Compare mode remains available as a debug tool.
+
+## Cache-First Projects
+
+Imported projects are reusable from the dashboard. A normal repeat `POST /api/repos/import` returns the cached Project Brain immediately and does not fetch files, re-chunk, re-embed, or retain architecture memory again.
+
+Use `forceReindex: true` or `POST /api/repos/:projectId/sync` for explicit refreshes. Reindex/sync uses SHA-256 file hashes and updates only changed/deleted files in RAG where possible. After task apply, DevContext still updates only touched files.
+
+Cost guardrails:
+
+```env
+DISABLE_AUTO_REINDEX=true
+MAX_EMBEDDING_FILES_PER_IMPORT=40
+MAX_EMBEDDING_CHUNKS_PER_IMPORT=200
+MAX_AGENT_CONTEXT_CHUNKS=8
+```
+
+## Delete Project
+
+Imported projects can be deleted from the dashboard or with:
+
+```bash
+curl -X DELETE http://localhost:4000/api/projects/:projectId
+```
+
+This removes the local project cache, file hashes, RAG chunks, generated tasks, and local runtime memories. `demo-shopease` is protected. Hindsight remote memories are not deleted when the provider lacks a safe delete API; use a fresh `HINDSIGHT_DEMO_SESSION_ID` for clean demos.
+
+## Curated Demo Task
+
+For the GitCode Chrome extension project, DevContext OS includes one reliable hackathon demo task:
+
+```bash
+curl -X POST http://localhost:4000/api/demo/gitcode-token-safety \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"github-yashyadav007-gitcode","mode":"safe-auto"}'
+```
+
+It demonstrates the real learning loop without depending on live LLM quota: Hindsight recall, RAG search/list, deterministic patch preview for `popup.js`/`popup.css`, GitHub mock or real PR creation, changed-file RAG update, and Hindsight task/risk memory retention.
 
 ## Import A Public GitHub Repo
 

@@ -29,18 +29,22 @@ export default function ImportPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submitImport(forceReindex: boolean) {
     setLoading(true);
     setError(null);
     setResult(null);
     try {
-      setResult(await importRepo(repoUrl.trim()));
+      setResult(await importRepo(repoUrl.trim(), forceReindex));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed");
     } finally {
       setLoading(false);
     }
+  }
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await submitImport(false);
   }
 
   return (
@@ -88,10 +92,20 @@ export default function ImportPage() {
                 />
               </div>
             </label>
-            <Button type="submit" disabled={loading}>
-              {loading ? <Loader2 className="animate-spin" size={16} /> : <RotateCcw size={16} />}
-              {loading ? "Importing repository..." : "Import Repo"}
-            </Button>
+            <div className="flex flex-wrap gap-3">
+              <Button type="submit" disabled={loading}>
+                {loading ? <Loader2 className="animate-spin" size={16} /> : <RotateCcw size={16} />}
+                {loading ? "Checking repository..." : "Import or Open Cached"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={loading || !repoUrl.trim()}
+                onClick={() => submitImport(true)}
+              >
+                Force Re-index
+              </Button>
+            </div>
           </form>
         </Card>
 
@@ -100,7 +114,7 @@ export default function ImportPage() {
           <Card className="mt-5">
             <div className="flex items-center gap-3 text-cream/70">
               <Loader2 className="animate-spin text-brand-teal" size={20} />
-              <span className="text-sm">Scanning files, indexing chunks, and retaining architecture memory...</span>
+              <span className="text-sm">Checking cache, scanning files only when needed, and indexing changed chunks...</span>
             </div>
           </Card>
         ) : null}
@@ -114,15 +128,20 @@ export default function ImportPage() {
             <div className="absolute inset-x-0 top-0 h-[2px] bg-brand-rainbow" />
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
-                <IconBadge icon={CheckCircle2} tone="green">Import complete</IconBadge>
+                <IconBadge icon={CheckCircle2} tone="green">
+                  {result.importSummary.cacheHit ? "Project already indexed" : "Import complete"}
+                </IconBadge>
                 <h2 className="mt-3 truncate font-display text-2xl text-cream">{result.project.name}</h2>
                 <p className="mt-1 truncate font-mono text-xs text-cream/40">{result.project.repoUrl}</p>
+                {result.importSummary.cacheHit ? (
+                  <p className="mt-3 text-sm text-brand-blue">Project already indexed. Opening cached Project Brain.</p>
+                ) : null}
               </div>
               <Link
                 href={`/projects/${result.project.id}/task`}
                 className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-md border border-brand-orange bg-brand-orange px-5 py-2 font-sans text-[0.82rem] font-semibold text-ink-900 transition-all hover:bg-transparent hover:text-brand-orange hover:shadow-glow-orange"
               >
-                Run First Task
+                {result.importSummary.cacheHit ? "Open Cached Project" : "Run First Task"}
                 <ArrowRight size={16} />
               </Link>
             </div>
@@ -134,6 +153,18 @@ export default function ImportPage() {
               <SummaryMetric label="Memory retained" value={result.importSummary.memoryRetained ? "Yes" : "No"} />
               <SummaryMetric label="Project reused" value={result.importSummary.projectReused ? "Yes" : "No"} />
               <SummaryMetric label="Memory count" value={result.project.memoryCount ?? 0} />
+              <SummaryMetric label="Cache hit" value={String(Boolean(result.importSummary.cacheHit))} />
+              <SummaryMetric label="Reindexed" value={String(Boolean(result.importSummary.reindexed))} />
+              <SummaryMetric label="Embeddings generated" value={result.importSummary.embeddingsGenerated ?? 0} />
+              <SummaryMetric label="Files skipped" value={result.importSummary.filesSkippedUnchanged ?? 0} />
+              <SummaryMetric label="RAG provider" value={result.importSummary.ragProvider ?? "unknown"} />
+              <SummaryMetric label="Embedding model" value={result.importSummary.embeddingModel ?? "unknown"} />
+            </div>
+
+            <div className="mt-5 rounded-md border border-workspace-border bg-slate-950/40 p-4 text-sm text-slate-300">
+              <p>Indexed at: {result.importSummary.indexedAt ?? result.project.indexedAt ?? "unknown"}</p>
+              <p className="mt-1 break-all">Last commit: {result.importSummary.lastIndexedCommitSha ?? result.project.lastIndexedCommitSha ?? "unknown"}</p>
+              <p className="mt-1">Embedding provider: {result.importSummary.embeddingProvider ?? result.project.embeddingProvider ?? "unknown"}</p>
             </div>
 
             {result.importSummary.warnings.length ? (

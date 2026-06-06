@@ -1,4 +1,3 @@
-import OpenAI from "openai";
 import { z } from "zod";
 import { CodingAgentProvider, CodingAgentTaskInput, CodingAgentTaskResult } from "./coding-agent-provider.interface";
 
@@ -32,18 +31,24 @@ const resultSchema = z.object({
   requiresApproval: z.boolean().default(true),
 });
 
-export class LlmCodingAgentProvider implements CodingAgentProvider {
-  readonly name: "openai" | "llm";
-  private readonly client: OpenAI | null;
+interface GeminiGenerateResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{ text?: string }>;
+    };
+  }>;
+  error?: {
+    message?: string;
+  };
+}
+
+export class GeminiCodingAgentProvider implements CodingAgentProvider {
+  readonly name = "gemini" as const;
+  private readonly apiKey?: string;
   private readonly model: string;
 
-  constructor(
-    apiKey = process.env.OPENAI_API_KEY,
-    model = process.env.CODING_AGENT_MODEL ?? "gpt-4.1-mini",
-    providerName: "openai" | "llm" = "llm",
-  ) {
-    this.name = providerName;
-    this.client = apiKey ? new OpenAI({ apiKey }) : null;
+  constructor(apiKey = process.env.GEMINI_API_KEY, model = process.env.CODING_AGENT_MODEL ?? "gemini-2.5-flash-lite") {
+    this.apiKey = apiKey;
     this.model = model;
   }
 
@@ -61,28 +66,50 @@ export class LlmCodingAgentProvider implements CodingAgentProvider {
     const repairedParsed = this.parseAndValidate(repaired);
     if (repairedParsed.success) return repairedParsed.data;
 
-    throw new Error(`LLM coding agent returned invalid JSON after repair: ${repairedParsed.error}. Raw excerpt: ${repaired.slice(0, 800)}`);
+    throw new Error(`Gemini coding agent returned invalid JSON after repair: ${repairedParsed.error}. Raw excerpt: ${repaired.slice(0, 800)}`);
   }
 
-  private async complete(content: string): Promise<string> {
-    if (!this.client) {
-      throw new Error("OPENAI_API_KEY is required for CODING_AGENT_PROVIDER=openai.");
+  private async complete(prompt: string): Promise<string> {
+    if (!this.apiKey) {
+      throw new Error("GEMINI_API_KEY is required for CODING_AGENT_PROVIDER=gemini.");
     }
 
-    const response = await this.client.chat.completions.create({
-      model: this.model,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are DevContext OS coding agent. You modify projects using RAG code context and Hindsight project memory. You must preserve project conventions and learn from prior tasks. Return only valid JSON.",
-        },
-        { role: "user", content },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.15,
-    });
-    return response.choices[0]?.message.content ?? "{}";
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.model)}:generateContent?key=${encodeURIComponent(
+        this.apiKey,
+      )}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: prompt }],
+            },
+          ],
+          systemInstruction: {
+            parts: [
+              {
+                text:
+                  "You are DevContext OS coding agent. You modify projects using RAG code context and Hindsight project memory. You must preserve project conventions and learn from prior tasks. Return only valid JSON.",
+              },
+            ],
+          },
+          generationConfig: {
+            temperature: 0.15,
+            responseMimeType: "application/json",
+          },
+        }),
+      },
+    );
+
+    const body = (await response.json()) as GeminiGenerateResponse;
+    if (!response.ok) {
+      throw new Error(`Gemini coding agent failed: ${body.error?.message ?? response.statusText}`);
+    }
+
+    return body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("") ?? "{}";
   }
 
   private buildPrompt(input: CodingAgentTaskInput): string {
@@ -165,7 +192,8 @@ export class LlmCodingAgentProvider implements CodingAgentProvider {
 
   private parseAndValidate(raw: string): { success: true; data: CodingAgentTaskResult } | { success: false; error: string } {
     try {
-      const parsed = JSON.parse(raw) as unknown;
+      const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```$/i, "").trim();
+      const parsed = JSON.parse(cleaned) as unknown;
       const result = resultSchema.safeParse(parsed);
       if (!result.success) return { success: false, error: JSON.stringify(result.error.flatten()) };
       return { success: true, data: result.data };

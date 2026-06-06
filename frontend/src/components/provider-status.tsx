@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bot, DatabaseZap, GitBranch, HardDrive } from "lucide-react";
+import { Bot, DatabaseZap, GitBranch, HardDrive, Sparkles } from "lucide-react";
 import { getProviderStatus, getSystemStatus } from "@/lib/api";
 import type { ProviderStatus, SystemStatus } from "@/lib/types";
 import { IconBadge } from "./ui";
@@ -46,12 +46,17 @@ export function SystemStatusBadges({ compact = false }: { compact?: boolean }) {
         RAG: {status.rag.provider}
       </IconBadge>
       <IconBadge tone={status.memory.provider === "hindsight" ? "purple" : "blue"}>Memory: {status.memory.provider}</IconBadge>
-      <IconBadge icon={Bot} tone={status.agent?.provider === "llm" ? "green" : status.agent?.provider === "claude-code" ? "purple" : "orange"}>
+      <IconBadge icon={Bot} tone={status.agent?.provider === "gemini" || status.agent?.provider === "llm" || status.agent?.provider === "openai" ? "green" : status.agent?.provider === "claude-code" ? "purple" : "orange"}>
         Agent: {status.agent?.provider ?? "mock"}
       </IconBadge>
-      <IconBadge icon={GitBranch} tone={status.github.mockWrite ? "orange" : "green"}>
-        GitHub: {status.github.mockWrite ? "mock" : "real"}
+      <IconBadge icon={Sparkles} tone={status.embeddings?.provider === "gemini" ? "green" : status.embeddings?.provider === "openai" ? "blue" : "orange"}>
+        Embeddings: {status.embeddings?.provider ?? status.rag.embeddingProvider ?? "unknown"}
       </IconBadge>
+      <IconBadge icon={GitBranch} tone={status.github.mockWrite ? "orange" : "green"}>
+        GitHub: {status.github.mockWrite ? "mock" : status.github.tokenConfigured ? "token" : "unauthenticated"}
+      </IconBadge>
+      {!compact && status.agent && status.agent.configured === false ? <IconBadge tone="orange">Agent key missing</IconBadge> : null}
+      {!compact && status.embeddings && !status.embeddings.configured ? <IconBadge tone="orange">Embedding key missing</IconBadge> : null}
       {!compact && status.rag.configuredProvider !== status.rag.provider ? <IconBadge tone="orange">RAG fallback</IconBadge> : null}
       {!compact && status.memory.configuredProvider !== status.memory.provider ? <IconBadge tone="orange">Memory fallback</IconBadge> : null}
     </div>

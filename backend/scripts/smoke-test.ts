@@ -2,12 +2,20 @@ const baseUrl = process.env.BASE_URL ?? "http://localhost:4000";
 const hindsightConfigured = Boolean(process.env.HINDSIGHT_API_URL && process.env.HINDSIGHT_API_KEY);
 const memoryProvider = process.env.MEMORY_PROVIDER ?? "local";
 const ragProvider = process.env.RAG_PROVIDER ?? "local";
-const pgvectorConfigured = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.OPENAI_API_KEY);
+const embeddingProvider = process.env.EMBEDDING_PROVIDER ?? "openai";
+const embeddingConfigured =
+  embeddingProvider === "gemini"
+    ? Boolean(process.env.GEMINI_API_KEY)
+    : embeddingProvider === "openai"
+      ? Boolean(process.env.OPENAI_API_KEY)
+      : Boolean(process.env.OLLAMA_BASE_URL);
+const pgvectorConfigured = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && embeddingConfigured);
 const testGitHubRepo = process.env.TEST_GITHUB_REPO;
 let importedProjectId: string | null = null;
 let executionTaskId: string | null = null;
 let learningTaskId: string | null = null;
 let chunksBeforeLearning = 0;
+const gitCodeProjectId = "github-yashyadav007-gitcode";
 
 class SkipSmokeCheck extends Error {
   constructor(message: string) {
@@ -91,6 +99,8 @@ const checks: SmokeCheck[] = [
       expect(result.activeProvider === "local" || result.activeProvider === "pgvector", "Expected active RAG provider");
       expect(typeof result.supabaseConfigured === "boolean", "Expected supabaseConfigured");
       expect(typeof result.embeddingConfigured === "boolean", "Expected embeddingConfigured");
+      expect(typeof result.embeddingProvider === "string", "Expected embeddingProvider");
+      expect(typeof result.embeddingDimensions === "number", "Expected embeddingDimensions");
     },
   },
   {
@@ -103,6 +113,13 @@ const checks: SmokeCheck[] = [
       expect(typeof result.llm === "object" && result.llm !== null, "Expected LLM status");
       expect(typeof result.github === "object" && result.github !== null, "Expected GitHub status");
       expect(typeof result.agent === "object" && result.agent !== null, "Expected agent status");
+      expect(typeof result.embeddings === "object" && result.embeddings !== null, "Expected embeddings status");
+      expect(typeof result.cache === "object" && result.cache !== null, "Expected cache status");
+      const agent = result.agent as { provider?: string; configured?: boolean };
+      if (process.env.CODING_AGENT_PROVIDER === "gemini" && !process.env.GEMINI_API_KEY) {
+        expect(agent.provider === "gemini", "Expected Gemini agent status");
+        expect(agent.configured === false, "Expected Gemini configured=false without key");
+      }
     },
   },
   {
@@ -120,6 +137,16 @@ const checks: SmokeCheck[] = [
       if (memoryProvider === "hindsight" && hindsightConfigured) {
         expect(result.fallbackUsed === false, "Expected real Hindsight verification without fallback");
       }
+    },
+  },
+  {
+    name: "DELETE seed project is protected",
+    run: async () => {
+      const response = await fetch(`${baseUrl}/api/projects/demo-shopease`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+      });
+      expect(response.status === 400, "Expected seed project delete to be rejected");
     },
   },
   {
@@ -294,7 +321,10 @@ const checks: SmokeCheck[] = [
       });
       const task = result.task as { id?: string; status?: string };
       expect(task.status === "patch_generated", "Expected task run patch_generated");
-      expect(result.agentProvider === "mock" || result.agentProvider === "llm" || result.agentProvider === "claude-code", "Expected agent provider");
+      expect(
+        ["mock", "llm", "openai", "gemini", "ollama", "claude-code"].includes(String(result.agentProvider)),
+        "Expected agent provider",
+      );
       expect(typeof result.memoryInfluence === "string", "Expected memory influence");
       expect(Array.isArray(result.patchPreview), "Expected patch preview");
     },
@@ -330,13 +360,17 @@ const checks: SmokeCheck[] = [
         }),
       });
       expect(result.success === true, "Expected learning apply success");
-      expect(result.memoryRetained === true, "Expected learning memory retained");
       const update = result.incrementalRagUpdate as { filesUpdated?: number; chunksInserted?: number; warnings?: string[] };
       expect(typeof update === "object" && update !== null, "Expected incrementalRagUpdate");
       expect((update.filesUpdated ?? 0) >= 1, "Expected at least one file updated");
       expect((update.chunksInserted ?? 0) >= 1, "Expected at least one chunk inserted");
       expect(result.memoryProvider === "local" || result.memoryProvider === "hindsight", "Expected apply memoryProvider");
       expect(typeof result.memoryFallbackUsed === "boolean", "Expected apply memoryFallbackUsed");
+      const retention = result.hindsightRetention as { retained?: unknown[]; skipped?: unknown[]; duplicatesSkipped?: number };
+      expect(typeof retention === "object" && retention !== null, "Expected hindsightRetention");
+      expect((retention.retained ?? []).length <= 6, "Expected controlled retained memory count");
+      expect(typeof retention.duplicatesSkipped === "number", "Expected duplicate skip count");
+      expect(result.memoryRetained === true || (retention.duplicatesSkipped ?? 0) > 0, "Expected learning memory retained or duplicate skipped");
     },
   },
   {
@@ -345,11 +379,28 @@ const checks: SmokeCheck[] = [
       const result = await request("/api/memory/demo-shopease/learning-summary");
       expect(result.projectId === "demo-shopease", "Expected learning summary project");
       expect(typeof result.memoryCount === "number", "Expected memory count");
+      expect(typeof result.usefulCount === "number", "Expected useful count");
+      expect(typeof result.noisyCount === "number", "Expected noisy count");
+      expect(typeof result.duplicateCount === "number", "Expected duplicate count");
       const recentTasks = result.recentTasks as Array<{ title?: string; content?: string }>;
       expect(Array.isArray(recentTasks), "Expected recent tasks");
       expect(
         recentTasks.some((memory) => memory.title === "Improve README with setup instructions"),
         "Expected retained README task memory",
+      );
+    },
+  },
+  {
+    name: "Memory quality report suppresses noisy RAG logs",
+    run: async () => {
+      const result = await request("/api/memory/demo-shopease/quality-report");
+      expect(result.projectId === "demo-shopease", "Expected quality report project");
+      expect(typeof result.totalMemories === "number", "Expected total memories");
+      const keep = result.recommendedKeep as Array<{ title?: string; content?: string }>;
+      expect(Array.isArray(keep), "Expected recommended keep");
+      expect(
+        !keep.some((memory) => /assistant updated rag index|project indexed \d+|inserted \d+ semantic chunk/i.test(`${memory.title} ${memory.content}`)),
+        "Expected no standalone noisy RAG index memories in useful set",
       );
     },
   },
@@ -424,10 +475,18 @@ const checks: SmokeCheck[] = [
         semanticIndex?: boolean;
         memoryProvider?: string;
         memoryFallbackUsed?: boolean;
+        cacheHit?: boolean;
+        embeddingsGenerated?: number;
+        embeddingProvider?: string;
+        indexedAt?: string;
       };
       expect(typeof project.id === "string", "Expected imported project id");
       expect((summary.chunksCreated ?? 0) > 0, "Expected imported chunks");
       expect(summary.ragProvider === "local" || summary.ragProvider === "pgvector", "Expected import ragProvider");
+      expect(summary.cacheHit === false, "Expected first import to miss cache");
+      expect(typeof summary.embeddingsGenerated === "number", "Expected embeddingsGenerated");
+      expect(typeof summary.embeddingProvider === "string", "Expected embeddingProvider");
+      expect(typeof summary.indexedAt === "string", "Expected indexedAt");
       expect(summary.memoryProvider === "local" || summary.memoryProvider === "hindsight", "Expected import memoryProvider");
       expect(typeof summary.memoryFallbackUsed === "boolean", "Expected import memoryFallbackUsed");
       if (summary.ragProvider === "pgvector" && summary.semanticIndex === true) {
@@ -448,7 +507,7 @@ const checks: SmokeCheck[] = [
     name: "pgvector optional semantic import/search",
     run: async () => {
       if (ragProvider !== "pgvector" || !pgvectorConfigured) {
-        throw new SkipSmokeCheck("RAG_PROVIDER=pgvector with Supabase and OpenAI env vars is not configured.");
+        throw new SkipSmokeCheck("RAG_PROVIDER=pgvector with Supabase and embedding provider env vars is not configured.");
       }
       if (!testGitHubRepo || !importedProjectId) {
         throw new SkipSmokeCheck("TEST_GITHUB_REPO is required for pgvector import smoke.");
@@ -482,8 +541,17 @@ const checks: SmokeCheck[] = [
         method: "POST",
         body: JSON.stringify({ repoUrl: testGitHubRepo }),
       });
-      const summary = secondImport.importSummary as { projectReused?: boolean; memoryRetained?: boolean };
+      const summary = secondImport.importSummary as {
+        projectReused?: boolean;
+        memoryRetained?: boolean;
+        cacheHit?: boolean;
+        reindexed?: boolean;
+        embeddingsGenerated?: number;
+      };
       expect(summary.projectReused === true, "Expected second import to reuse project");
+      expect(summary.cacheHit === true, "Expected second import cache hit");
+      expect(summary.reindexed === false, "Expected second import not to reindex");
+      expect(summary.embeddingsGenerated === 0, "Expected second import to generate zero embeddings");
       expect(summary.memoryRetained === false, "Expected duplicate architecture memory to be skipped");
 
       const afterMemory = await request(`/api/memory/${importedProjectId}`);
@@ -497,6 +565,41 @@ const checks: SmokeCheck[] = [
         (node) => node.type === "memory" && node.data?.label?.startsWith("Architecture: Initial repo architecture"),
       );
       expect(architectureNodes.length <= 1, "Expected graph to dedupe architecture memory nodes");
+    },
+  },
+  {
+    name: "GitHub force reindex bypasses cache",
+    run: async () => {
+      if (!testGitHubRepo || !importedProjectId) {
+        throw new SkipSmokeCheck("No imported project from TEST_GITHUB_REPO.");
+      }
+
+      const result = await request("/api/repos/import", {
+        method: "POST",
+        body: JSON.stringify({ repoUrl: testGitHubRepo, forceReindex: true }),
+      });
+      const summary = result.importSummary as { cacheHit?: boolean; reindexed?: boolean; filesSkippedUnchanged?: number; embeddingsGenerated?: number };
+      expect(summary.cacheHit === false, "Expected force reindex to bypass cache");
+      expect(summary.reindexed === true, "Expected force reindex to mark reindexed");
+      expect(typeof summary.filesSkippedUnchanged === "number", "Expected filesSkippedUnchanged");
+      expect(typeof summary.embeddingsGenerated === "number", "Expected embeddingsGenerated");
+    },
+  },
+  {
+    name: "GitHub sync unchanged repo",
+    run: async () => {
+      if (!importedProjectId) {
+        throw new SkipSmokeCheck("No imported project from TEST_GITHUB_REPO.");
+      }
+
+      const result = await request(`/api/repos/${importedProjectId}/sync`, {
+        method: "POST",
+        body: JSON.stringify({ forceReindex: false }),
+      });
+      expect(result.projectId === importedProjectId, "Expected sync project id");
+      expect(result.syncSkipped === true, "Expected sync skipped for unchanged branch");
+      expect(result.cacheHit === true, "Expected sync cache hit");
+      expect(result.embeddingsGenerated === 0, "Expected sync to generate zero embeddings");
     },
   },
   {
@@ -582,6 +685,82 @@ const checks: SmokeCheck[] = [
         !(result.memoryAnswer as string).includes("No indexed chunks matched strongly"),
         "Expected memory answer not to deny indexed chunks when chunks are present",
       );
+    },
+  },
+  {
+    name: "Delete imported project workflow",
+    run: async () => {
+      if (!testGitHubRepo || !importedProjectId) {
+        throw new SkipSmokeCheck("No imported project from TEST_GITHUB_REPO.");
+      }
+
+      const deleted = await request(`/api/projects/${importedProjectId}`, {
+        method: "DELETE",
+      });
+      expect(deleted.success === true, "Expected delete success");
+      const deletedReport = deleted.deleted as { project?: boolean; ragChunks?: number; tasks?: number; localMemories?: number; cache?: boolean };
+      expect(deletedReport.project === true, "Expected project record deleted");
+      expect(typeof deletedReport.ragChunks === "number", "Expected RAG chunk cleanup count");
+      expect(typeof deletedReport.tasks === "number", "Expected task cleanup count");
+      expect(typeof deletedReport.localMemories === "number", "Expected local memory cleanup count");
+      expect(deletedReport.cache === true, "Expected cache cleared");
+      expect(typeof deleted.hindsight === "object" && deleted.hindsight !== null, "Expected Hindsight delete report");
+
+      const detail = await fetch(`${baseUrl}/api/projects/${importedProjectId}`);
+      expect(detail.status === 404, "Expected deleted project details to return 404");
+
+      const chunks = await request(`/api/rag/${importedProjectId}/chunks`);
+      expect(Array.isArray(chunks.chunks), "Expected chunks response after delete");
+      expect((chunks.chunks as unknown[]).length === 0, "Expected RAG chunks cleared after delete");
+
+      const reimport = await request("/api/repos/import", {
+        method: "POST",
+        body: JSON.stringify({ repoUrl: testGitHubRepo }),
+      });
+      const summary = reimport.importSummary as { cacheHit?: boolean; projectReused?: boolean };
+      expect(summary.cacheHit === false, "Expected re-import after delete to be fresh");
+      expect(summary.projectReused === false, "Expected re-import after delete not to reuse project");
+    },
+  },
+  {
+    name: "Curated GitCode token safety demo",
+    run: async () => {
+      const projectResponse = await fetch(`${baseUrl}/api/projects/${gitCodeProjectId}`);
+      if (projectResponse.status === 404) {
+        throw new SkipSmokeCheck("GitCode project is not imported.");
+      }
+      if (!projectResponse.ok) {
+        throw new Error(`GitCode project lookup failed: ${projectResponse.status}`);
+      }
+
+      const preview = await request("/api/demo/gitcode-token-safety", {
+        method: "POST",
+        body: JSON.stringify({ projectId: gitCodeProjectId, mode: "preview-only" }),
+      });
+      expect(preview.agentProvider === "curated-demo", "Expected curated demo provider");
+      const previewPatches = preview.patchPreview as Array<{ filePath?: string }>;
+      expect(previewPatches.some((patch) => patch.filePath === "popup.js"), "Expected popup.js patch");
+
+      const applied = await request("/api/demo/gitcode-token-safety", {
+        method: "POST",
+        body: JSON.stringify({ projectId: gitCodeProjectId, mode: "safe-auto" }),
+      });
+      const applyResult = applied.applyResult as { success?: boolean; prUrl?: string; incrementalRagUpdate?: unknown };
+      expect(applyResult.success === true, "Expected curated demo apply success");
+      expect(typeof applyResult.prUrl === "string", "Expected curated demo PR URL");
+      const ragUpdate = applied.incrementalRagUpdate as { filesUpdated?: number; chunksInserted?: number };
+      expect((ragUpdate.filesUpdated ?? 0) > 0, "Expected curated demo incremental RAG update");
+      expect((ragUpdate.chunksInserted ?? 0) > 0, "Expected curated demo chunks inserted");
+      const retention = applied.hindsightRetention as { retained?: unknown[]; duplicatesSkipped?: number; skipped?: unknown[] };
+      expect((retention.retained ?? []).length > 0 || (retention.duplicatesSkipped ?? 0) > 0, "Expected curated demo Hindsight retain or duplicate skip");
+
+      const learning = await request(`/api/memory/${gitCodeProjectId}/learning-summary`);
+      const recentTasks = learning.recentTasks as Array<{ title?: string }>;
+      expect(recentTasks.some((memory) => memory.title === "Add GitHub token safety guard"), "Expected token safety task memory");
+
+      const graph = await request(`/api/projects/${gitCodeProjectId}/graph`);
+      const nodes = graph.nodes as Array<{ type?: string }>;
+      expect(nodes.some((node) => node.type === "pr"), "Expected curated demo PR graph node");
     },
   },
 ];

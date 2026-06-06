@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import { GraphService } from "../services/graph.service";
 import { LocalMemoryService } from "../services/local-memory.service";
 import { LocalRagService } from "../services/local-rag.service";
@@ -26,6 +27,10 @@ export function createProjectsRouter(
     try {
       res.json(await projectService.getProject(req.params.projectId));
     } catch (error) {
+      if (error instanceof Error && error.message.startsWith("Project not found:")) {
+        res.status(404).json({ error: error.message });
+        return;
+      }
       next(error);
     }
   });
@@ -33,24 +38,55 @@ export function createProjectsRouter(
   router.delete("/:projectId", async (req, res, next) => {
     try {
       const { projectId } = req.params;
+      const allowSeedDelete = z
+        .union([z.literal("true"), z.literal(true)])
+        .optional()
+        .safeParse((req.query.allowSeedDelete ?? (req.body as { allowSeedDelete?: unknown } | undefined)?.allowSeedDelete) as unknown);
+
       if (projectId === "demo-shopease") {
-        res.status(400).json({ error: "Seed demo project cannot be deleted." });
-        return;
+        if (!allowSeedDelete.success || allowSeedDelete.data !== true && allowSeedDelete.data !== "true" || process.env.NODE_ENV === "production") {
+          res.status(400).json({ error: "Seed demo project cannot be deleted." });
+          return;
+        }
+      } else {
+        const existing = projectService.findImportedProject(projectId);
+        if (!existing) {
+          res.status(404).json({ error: "Imported project not found." });
+          return;
+        }
       }
 
       const projectDeleted = projectService.deleteImportedProject(projectId);
-      const chunksCleared = await ragService.clearProjectChunksWithCount(projectId);
-      const memoriesCleared = memoryService.clearProject(projectId);
+      const warnings: string[] = [];
+      const ragChunksCleared = await ragService.clearProjectChunksWithCount(projectId);
+      const localMemoriesCleared = memoryService.clearProject(projectId);
       const tasksCleared = taskService.clearProject(projectId);
+
+      if (memoryService.providerName === "hindsight") {
+        warnings.push(
+          "Hindsight remote delete is not supported; project data was removed locally and from RAG. Use a new HINDSIGHT_DEMO_SESSION_ID for clean demo memory.",
+        );
+      }
 
       res.json({
         success: true,
+        projectId,
         deleted: {
           project: projectDeleted,
-          chunks: chunksCleared,
-          memories: memoriesCleared,
+          ragChunks: ragChunksCleared,
           tasks: tasksCleared,
+          localMemories: localMemoriesCleared,
+          cache: projectDeleted,
         },
+        hindsight: {
+          provider: memoryService.providerName,
+          remoteDeleteSupported: false,
+          action:
+            memoryService.providerName === "hindsight"
+              ? "remote memories not deleted; project will no longer be recalled locally after the project record is gone"
+              : "local runtime memories deleted",
+        },
+        warnings,
       });
     } catch (error) {
       next(error);

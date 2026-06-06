@@ -65,6 +65,14 @@ export class GitHubService {
     return (await this.fetchRepoMetadata(owner, repo)).defaultBranch;
   }
 
+  async fetchBranchCommitSha(owner: string, repo: string, branch: string): Promise<string> {
+    const response = await this.githubRequest<Record<string, unknown>>(
+      `/repos/${owner}/${repo}/branches/${encodeURIComponent(branch)}`,
+    );
+    const commit = typeof response.commit === "object" && response.commit !== null ? (response.commit as Record<string, unknown>) : {};
+    return this.asString(commit.sha) ?? "";
+  }
+
   async fetchRepoTree(owner: string, repo: string, branch: string): Promise<GitHubTreeFile[]> {
     const response = await this.githubRequest<GitHubTreeResponse>(
       `/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,

@@ -26,7 +26,11 @@ export class LocalRagService {
 
   async indexChunks(projectId: string, chunks: RagChunk[]): Promise<IndexChunksResult> {
     try {
-      return await this.provider.indexChunks(projectId, chunks);
+      const result = await this.provider.indexChunks(projectId, chunks);
+      if (this.provider.name !== "local") {
+        await this.localProvider.indexChunks(projectId, chunks);
+      }
+      return result;
     } catch (error) {
       const warning = `RAG provider ${this.provider.name} failed during index; used local RAG fallback. ${
         error instanceof Error ? error.message : String(error)
@@ -49,7 +53,7 @@ export class LocalRagService {
   async searchProjectContext(
     project: ProjectBrain,
     message: string,
-    limit = 8,
+    limit = Number(process.env.MAX_AGENT_CONTEXT_CHUNKS ?? 8),
   ): Promise<{ chunks: ScoredRagChunk[]; fallbackUsed: boolean; query: string }> {
     const query = this.buildContextQuery(project, message);
     const chunks = await this.search(project.id, query, limit);
@@ -154,7 +158,7 @@ export class LocalRagService {
   }
 
   async clearProjectChunksWithCount(projectId: string): Promise<number> {
-    const before = (await this.localProvider.listChunks(projectId)).filter((chunk) => chunk.source !== "seed").length;
+    const before = (await this.listChunks(projectId)).filter((chunk) => chunk.source !== "seed").length;
     await this.clearProjectChunks(projectId);
     return before;
   }
