@@ -19,7 +19,7 @@ export function BrainTabs({ projectId }: { projectId: string }) {
   const base = `/projects/${projectId}`;
 
   return (
-    <div className="flex gap-2 overflow-x-auto border-b border-workspace-border pb-3">
+    <div className="flex gap-2 overflow-x-auto border-b border-line pb-3">
       {tabs.map((tab) => {
         const href = `${base}${tab.href}`;
         const active = pathname === href;
@@ -29,11 +29,11 @@ export function BrainTabs({ projectId }: { projectId: string }) {
             key={tab.label}
             href={href}
             className={cn(
-              "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white",
-              active && "bg-sky-400/10 text-sky-200 ring-1 ring-sky-400/30",
+              "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md border border-transparent px-3 font-mono text-[0.72rem] uppercase tracking-[0.12em] text-cream/55 transition hover:border-line hover:text-cream",
+              active && "border-brand-orange/60 bg-brand-orange/10 text-brand-orange",
             )}
           >
-            <Icon size={16} />
+            <Icon size={15} />
             {tab.label}
           </Link>
         );
