@@ -46,7 +46,7 @@ export default function DashboardPage() {
 
         <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_auto]">
           <div>
-            <HeroQuote text="Import a GitHub repo and build a persistent Project Brain instantly." />
+            <HeroQuote text="Import a GitHub repo and build a persistent Vikings Brain instantly." />
 
             <p className="hud-label mb-4 mt-9">Unleash the power of</p>
             <FramedTitle>
@@ -56,17 +56,17 @@ export default function DashboardPage() {
             </FramedTitle>
 
             <p className="mt-6 max-w-md pl-[1.4rem] text-sm leading-relaxed text-cream/55 sm:text-base">
-              Open a persistent Project Brain or import a public GitHub repository to give your agent durable memory.
+              Open a persistent Vikings Brain or import a public GitHub repository to give Vikings durable memory.
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-3 pl-[1.4rem]">
               <ProviderStatusBadge />
-              <TryLink href="/import">New Project Brain</TryLink>
+              <TryLink href="/import">New Vikings Brain</TryLink>
             </div>
           </div>
 
           <div className="hidden flex-col items-center gap-8 lg:flex lg:w-80">
             <RobotFace />
-            <FeatureList items={["Project Brains", "RAG Index", "Memory Layer", "Code Graph", "And much more"]} />
+            <FeatureList items={["Vikings Brains", "RAG Index", "Memory Layer", "Code Graph", "And much more"]} />
           </div>
         </div>
       </section>
@@ -75,7 +75,7 @@ export default function DashboardPage() {
 
       {/* Stat strip */}
       <section className="mt-8 grid gap-px overflow-hidden border border-line bg-line sm:grid-cols-3">
-        <StatTile icon={Boxes} label="Project Brains" value={projects.length} tone="purple" />
+        <StatTile icon={Boxes} label="Vikings Brains" value={projects.length} tone="purple" />
         <StatTile icon={History} label="Memories Retained" value={totalMemories} tone="green" />
         <StatTile icon={Database} label="Indexed Chunks" value={totalChunks} tone="blue" />
       </section>
@@ -91,7 +91,7 @@ export default function DashboardPage() {
         {!loading && !error && projects.length === 0 ? (
           <EmptyState
             title="No projects yet"
-            body="Import a GitHub repository to create the first Project Brain and start building durable context."
+            body="Import a GitHub repository to create the first Vikings Brain and start building durable context."
           />
         ) : null}
 

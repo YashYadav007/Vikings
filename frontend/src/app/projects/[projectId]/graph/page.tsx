@@ -71,7 +71,7 @@ export default function GraphPage() {
       <BrainTabs projectId={projectId} />
       <div className="mt-6">
         <h1 className="text-3xl font-semibold text-white">Project Graph</h1>
-        <p className="mt-2 text-slate-400">Visual Project Brain rendered directly from backend nodes and edges.</p>
+        <p className="mt-2 text-slate-400">Visual Vikings Brain rendered directly from backend nodes and edges.</p>
       </div>
 
       {loading ? <div className="mt-5"><LoadingState label="Loading graph..." /></div> : null}

@@ -58,7 +58,7 @@ export default function TaskRunnerPage() {
         <div>
           <FramedTitle pretitle="Agent / Execute">Run Task</FramedTitle>
           <p className="mt-5 max-w-xl pl-[1.4rem] text-sm leading-relaxed text-cream/55 sm:text-base">
-            The coding agent recalls Hindsight, searches RAG, generates a patch, applies safely, updates RAG, and saves
+            Agent Vikings recalls Hindsight, searches RAG, generates a patch, applies safely, updates RAG, and saves
             learning.
           </p>
         </div>
@@ -75,7 +75,7 @@ export default function TaskRunnerPage() {
             <textarea
               value={message}
               onChange={(event) => setMessage(event.target.value)}
-              placeholder="Tell the agent what to change..."
+              placeholder="Tell Vikings what to change..."
               className="mt-2 min-h-32 w-full resize-y border border-line bg-ink-900 px-4 py-3 font-mono text-sm leading-6 text-cream outline-none transition placeholder:text-cream/30 focus:border-brand-purple/60"
               required
             />

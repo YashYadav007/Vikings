@@ -25,7 +25,7 @@ export default function ProjectBrainPage() {
   return (
     <PageShell>
       <BrainTabs projectId={projectId} />
-      {loading ? <div className="mt-6"><LoadingState label="Loading Project Brain..." /></div> : null}
+      {loading ? <div className="mt-6"><LoadingState label="Loading Vikings Brain..." /></div> : null}
       {error ? <div className="mt-6"><ErrorState message={error} /></div> : null}
       {project ? (
         <div className="mt-6 space-y-5">

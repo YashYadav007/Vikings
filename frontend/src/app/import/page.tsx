@@ -53,7 +53,7 @@ export default function ImportPage() {
           GitHub Repo
         </FramedTitle>
         <p className="mt-5 pl-[1.4rem] text-sm leading-relaxed text-cream/55 sm:text-base">
-          Create or refresh a Project Brain from a public GitHub repository. We scan the tree, index code into
+          Create or refresh a Vikings Brain from a public GitHub repository. We scan the tree, index code into
           retrievable chunks, and retain architecture memory.
         </p>
 

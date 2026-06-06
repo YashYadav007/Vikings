@@ -101,7 +101,7 @@ function TopNav() {
         <span className="font-sans text-2xl font-extrabold tracking-tight text-cream">VIKINGS</span>
         <span className="hidden h-7 w-px bg-line sm:block" />
         <span className="hidden font-mono text-[0.62rem] uppercase tracking-[0.28em] text-cream/45 sm:block">
-          Project Brain OS
+          Memory-Powered Agent
         </span>
       </Link>
 
