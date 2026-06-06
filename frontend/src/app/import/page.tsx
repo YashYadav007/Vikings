@@ -47,7 +47,11 @@ export default function ImportPage() {
     <PageShell>
       <div className="mx-auto max-w-3xl">
         {/* Hero */}
-        <FramedTitle pretitle="Ingest / GitHub">Import GitHub Repo</FramedTitle>
+        <FramedTitle pretitle="Ingest / GitHub">
+          Import
+          <br />
+          GitHub Repo
+        </FramedTitle>
         <p className="mt-5 pl-[1.4rem] text-sm leading-relaxed text-cream/55 sm:text-base">
           Create or refresh a Project Brain from a public GitHub repository. We scan the tree, index code into
           retrievable chunks, and retain architecture memory.
@@ -59,7 +63,7 @@ export default function ImportPage() {
         <div className="mt-7 flex flex-wrap items-center gap-2 font-mono text-[0.7rem] uppercase tracking-[0.14em]">
           {PIPELINE.map((step, i) => (
             <span key={step.label} className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 border border-cream/15 px-2.5 py-1.5 text-cream/70">
+              <span className="inline-flex items-center gap-1.5 border border-line px-2.5 py-1.5 text-cream/70">
                 <step.icon size={13} className="text-brand-teal" />
                 {step.label}
               </span>
@@ -73,7 +77,7 @@ export default function ImportPage() {
           <form onSubmit={onSubmit} className="space-y-5">
             <label className="block">
               <HudLabel>GitHub Repo URL</HudLabel>
-              <div className="mt-2 flex items-center gap-3 border border-cream/15 bg-ink-900 px-3 transition focus-within:border-brand-purple/60">
+              <div className="mt-2 flex items-center gap-3 border border-line bg-ink-900 px-3 transition focus-within:border-brand-purple/60">
                 <Github size={18} className="shrink-0 text-cream/40" />
                 <input
                   value={repoUrl}
@@ -123,7 +127,7 @@ export default function ImportPage() {
               </Link>
             </div>
 
-            <div className="mt-6 grid gap-px border border-cream/15 bg-cream/15 sm:grid-cols-3">
+            <div className="mt-6 grid gap-px border border-line bg-line sm:grid-cols-3">
               <SummaryMetric label="Files scanned" value={result.importSummary.filesScanned} />
               <SummaryMetric label="Files indexed" value={result.importSummary.filesIndexed} />
               <SummaryMetric label="Chunks created" value={result.importSummary.chunksCreated} />
