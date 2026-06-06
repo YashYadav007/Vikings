@@ -47,6 +47,6 @@ export interface CodingAgentTaskResult {
 }
 
 export interface CodingAgentProvider {
-  readonly name: "llm" | "mock" | "claude-code";
+  readonly name: "gemini" | "openai" | "llm" | "ollama" | "mock" | "claude-code";
   runTask(input: CodingAgentTaskInput): Promise<CodingAgentTaskResult>;
 }

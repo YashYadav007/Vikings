@@ -10,8 +10,10 @@ export interface RagProviderStatus {
   pgvectorConfigured: boolean;
   supabaseConfigured: boolean;
   embeddingConfigured: boolean;
+  embeddingProvider: string;
   fallbackMode: string;
   embeddingModel?: string;
+  embeddingDimensions?: number;
 }
 
 export function createRagProvider(localProvider: LocalRagProvider, supabaseService: SupabaseService, embeddingService: EmbeddingService): RagProvider {
@@ -50,7 +52,9 @@ export function getRagProviderStatus(
     pgvectorConfigured: configuredProvider === "pgvector" && supabaseConfigured && embeddingConfigured,
     supabaseConfigured,
     embeddingConfigured,
+    embeddingProvider: embeddingService.provider,
     fallbackMode: process.env.RAG_FALLBACK_MODE ?? "local",
     embeddingModel: embeddingService.model,
+    embeddingDimensions: embeddingService.dimensions,
   };
 }

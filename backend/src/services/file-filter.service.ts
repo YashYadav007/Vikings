@@ -1,7 +1,7 @@
 import { GitHubTreeFile } from "../types";
 
 const MAX_FILE_SIZE_BYTES = 100 * 1024;
-const MAX_IMPORT_FILES = 40;
+const DEFAULT_MAX_IMPORT_FILES = 40;
 
 const IGNORE_DIRS = new Set(["node_modules", ".git", ".next", "dist", "build", "coverage"]);
 const IGNORE_FILES = new Set(["package-lock.json", "yarn.lock", "pnpm-lock.yaml"]);
@@ -54,17 +54,18 @@ export interface FilteredFilesResult {
 
 export class FileFilterService {
   filter(files: GitHubTreeFile[]): FilteredFilesResult {
+    const maxImportFiles = Number(process.env.MAX_EMBEDDING_FILES_PER_IMPORT ?? DEFAULT_MAX_IMPORT_FILES);
     const warnings: string[] = [];
     const usefulFiles = files
       .filter((file) => this.isUsefulFile(file))
       .sort((a, b) => this.priorityScore(b.path) - this.priorityScore(a.path) || a.path.localeCompare(b.path));
 
-    if (usefulFiles.length > MAX_IMPORT_FILES) {
-      warnings.push(`Import limited to top ${MAX_IMPORT_FILES} useful files out of ${usefulFiles.length} eligible files.`);
+    if (usefulFiles.length > maxImportFiles) {
+      warnings.push(`Import limited to top ${maxImportFiles} useful files out of ${usefulFiles.length} eligible files.`);
     }
 
     return {
-      files: usefulFiles.slice(0, MAX_IMPORT_FILES),
+      files: usefulFiles.slice(0, maxImportFiles),
       warnings,
     };
   }

@@ -67,6 +67,10 @@ export class ProjectService {
     return this.readImportedProjects().some((project) => project.id === projectId);
   }
 
+  findImportedProject(projectId: ProjectId): ImportedProject | undefined {
+    return this.readImportedProjects().find((project) => project.id === projectId);
+  }
+
   deleteImportedProject(projectId: ProjectId): boolean {
     const projects = this.readImportedProjects();
     const nextProjects = projects.filter((project) => project.id !== projectId);

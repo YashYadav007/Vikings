@@ -6,7 +6,7 @@ Base URL:
 http://localhost:4000
 ```
 
-Existing Sprint 1-5 response shapes remain compatible. Sprint 6 adds semantic RAG provider status, system status, and Hindsight verification APIs.
+Existing response shapes remain compatible. New provider/cache fields are additive: Gemini/OpenAI agent metadata, embedding metadata, cache hit status, and sync/reindex counters.
 
 ## Health And Projects
 
@@ -33,7 +33,7 @@ Imports a public GitHub repository into local project and RAG stores.
 ```bash
 curl -X POST http://localhost:4000/api/repos/import \
   -H 'Content-Type: application/json' \
-  -d '{"repoUrl":"https://github.com/octocat/Hello-World"}'
+  -d '{"repoUrl":"https://github.com/octocat/Hello-World","forceReindex":false}'
 ```
 
 Supported URL formats:
@@ -61,7 +61,14 @@ Response:
     "memoryCount": 1,
     "chunkCount": 1,
     "createdAt": "2026-06-05T00:00:00.000Z",
-    "updatedAt": "2026-06-05T00:00:00.000Z"
+    "updatedAt": "2026-06-05T00:00:00.000Z",
+    "indexedAt": "2026-06-05T00:00:00.000Z",
+    "lastIndexedCommitSha": "abc123",
+    "ragProvider": "pgvector",
+    "semanticIndex": true,
+    "embeddingProvider": "gemini",
+    "embeddingModel": "gemini-embedding-2",
+    "embeddingDimensions": 1536
   },
   "importSummary": {
     "filesScanned": 1,
@@ -71,8 +78,18 @@ Response:
     "memoryProvider": "local",
     "memoryFallbackUsed": false,
     "projectReused": false,
+    "cacheHit": false,
+    "reindexed": false,
+    "embeddingsGenerated": 1,
+    "filesSkippedUnchanged": 0,
+    "filesReindexed": 1,
     "ragProvider": "local",
     "semanticIndex": false,
+    "embeddingProvider": "gemini",
+    "embeddingModel": "gemini-embedding-2",
+    "embeddingDimensions": 1536,
+    "indexedAt": "2026-06-05T00:00:00.000Z",
+    "lastIndexedCommitSha": "abc123",
     "warnings": []
   }
 }
@@ -80,7 +97,120 @@ Response:
 
 `project.architecture` and the initial architecture memory use provider-aware wording. pgvector imports say `Indexed X semantic RAG chunks using Supabase pgvector`; local imports say `Indexed X local RAG chunks for keyword search`.
 
-Re-importing the same repo reuses the same project ID, refreshes metadata/chunks, and skips duplicate architecture memory. On the second import `importSummary.projectReused` is `true`; `memoryRetained` is `false` if the equivalent architecture memory already exists.
+Re-importing the same repo reuses the same project ID. If `forceReindex` is not true, it returns a cache hit immediately: `cacheHit: true`, `reindexed: false`, `embeddingsGenerated: 0`, and no duplicate architecture memory. Use `forceReindex: true` to explicitly refresh.
+
+## POST /api/repos/:projectId/sync
+
+Explicitly checks the latest GitHub branch and updates only changed/deleted file chunks.
+
+```bash
+curl -X POST http://localhost:4000/api/repos/github-owner-repo/sync \
+  -H 'Content-Type: application/json' \
+  -d '{"forceReindex":false}'
+```
+
+Response:
+
+```json
+{
+  "projectId": "github-owner-repo",
+  "syncSkipped": true,
+  "cacheHit": true,
+  "changedFiles": [],
+  "filesReindexed": 0,
+  "filesSkippedUnchanged": 40,
+  "embeddingsGenerated": 0,
+  "ragProvider": "pgvector",
+  "semanticIndex": true,
+  "embeddingProvider": "gemini",
+  "embeddingModel": "gemini-embedding-2",
+  "warnings": []
+}
+```
+
+## DELETE /api/projects/:projectId
+
+Deletes an imported project and clears local/cache state.
+
+```bash
+curl -X DELETE http://localhost:4000/api/projects/github-owner-repo
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "projectId": "github-owner-repo",
+  "deleted": {
+    "project": true,
+    "ragChunks": 24,
+    "tasks": 3,
+    "localMemories": 4,
+    "cache": true
+  },
+  "hindsight": {
+    "provider": "hindsight",
+    "remoteDeleteSupported": false,
+    "action": "remote memories not deleted; project will no longer be recalled locally after the project record is gone"
+  },
+  "warnings": [
+    "Hindsight remote delete is not supported; project data was removed locally and from RAG. Use a new HINDSIGHT_DEMO_SESSION_ID for clean demo memory."
+  ]
+}
+```
+
+`demo-shopease` is protected and returns `400` unless `allowSeedDelete=true` is supplied in non-production dev mode. Remote Hindsight memories are not deleted unless the provider adds a safe delete API; deleted projects disappear from dashboard and normal project flows.
+
+## POST /api/demo/gitcode-token-safety
+
+Runs the curated GitCode hackathon demo task through the real DevContext flow: Hindsight recall, RAG search/list, deterministic patch preview, GitHub branch/commit/PR workflow, incremental RAG update, and Hindsight memory retain.
+
+```bash
+curl -X POST http://localhost:4000/api/demo/gitcode-token-safety \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"github-yashyadav007-gitcode","mode":"safe-auto"}'
+```
+
+Request:
+
+```json
+{
+  "projectId": "github-yashyadav007-gitcode",
+  "mode": "safe-auto"
+}
+```
+
+`mode` defaults to `safe-auto`; use `preview-only` to show the patch without applying.
+
+Response includes the same task-run evidence fields:
+
+```json
+{
+  "success": true,
+  "projectId": "github-yashyadav007-gitcode",
+  "agentProvider": "curated-demo",
+  "agentModel": "gitcode-token-safety-demo",
+  "memoryProvider": "hindsight",
+  "ragProvider": "pgvector",
+  "memoryInfluence": "...",
+  "memoriesUsed": [],
+  "chunksUsed": [],
+  "patchPreview": [],
+  "applyResult": {
+    "success": true,
+    "branchName": "devcontext/gitcode-token-safety-abc123",
+    "prUrl": "..."
+  },
+  "incrementalRagUpdate": {
+    "filesUpdated": 2,
+    "chunksInserted": 2
+  },
+  "hindsightRetention": {}
+}
+```
+
+With `MOCK_GITHUB_WRITE=true`, PR creation is simulated. With `MOCK_GITHUB_WRITE=false`, `GITHUB_TOKEN`, and write access, the same endpoint creates a real branch and PR.
 
 ## RAG
 
@@ -117,8 +247,10 @@ Response:
   "pgvectorConfigured": false,
   "supabaseConfigured": false,
   "embeddingConfigured": false,
+  "embeddingProvider": "gemini",
   "fallbackMode": "local",
-  "embeddingModel": "text-embedding-3-small"
+  "embeddingModel": "gemini-embedding-2",
+  "embeddingDimensions": 1536
 }
 ```
 
@@ -370,6 +502,9 @@ Response:
   "projectId": "demo-shopease",
   "provider": "local",
   "memoryCount": 10,
+  "usefulCount": 8,
+  "noisyCount": 1,
+  "duplicateCount": 1,
   "recentTasks": [],
   "decisions": [],
   "risks": [],
@@ -378,6 +513,29 @@ Response:
   "topFilesMentioned": []
 }
 ```
+
+Quality report:
+
+```bash
+curl http://localhost:4000/api/memory/:projectId/quality-report
+```
+
+Response:
+
+```json
+{
+  "projectId": "demo-shopease",
+  "provider": "hindsight",
+  "totalMemories": 12,
+  "duplicateGroups": [],
+  "noisyMemories": [],
+  "recommendedKeep": [],
+  "recommendedArchive": [],
+  "latestArchitectureMemory": null
+}
+```
+
+The memory quality gate keeps durable task, decision, risk, preference, follow-up, and architecture memories. It rejects generic assistant event logs, standalone RAG indexing logs, duplicate decisions, and low-value task restatements.
 
 File-scoped chunks:
 

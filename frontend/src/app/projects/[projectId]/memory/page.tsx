@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { BrainTabs } from "@/components/brain-tabs";
 import { Card, EmptyState, ErrorState, IconBadge, LoadingState, PageShell } from "@/components/ui";
-import { getMemoryDebug, getProjectMemories } from "@/lib/api";
+import { getMemoryDebug, getMemoryQualityReport, getProjectMemories } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import type { Memory } from "@/lib/types";
 
@@ -12,15 +12,31 @@ export default function MemoryPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [memories, setMemories] = useState<Memory[]>([]);
   const [provider, setProvider] = useState<string | null>(null);
+  const [allMemories, setAllMemories] = useState<Memory[]>([]);
+  const [usefulMemories, setUsefulMemories] = useState<Memory[]>([]);
+  const [qualityCounts, setQualityCounts] = useState<{ noisy: number; duplicates: number } | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([getProjectMemories(projectId), getMemoryDebug(projectId).catch(() => null)])
-      .then(([projectMemories, debug]) => {
+    Promise.all([getProjectMemories(projectId), getMemoryDebug(projectId).catch(() => null), getMemoryQualityReport(projectId).catch(() => null)])
+      .then(([projectMemories, debug, quality]) => {
         const debugMemories = debug?.memories ?? [];
         setProvider(debug?.provider ?? null);
-        setMemories(debugMemories.length >= projectMemories.length ? debugMemories : projectMemories);
+        const full = debugMemories.length >= projectMemories.length ? debugMemories : projectMemories;
+        setAllMemories(full);
+        const useful = quality?.recommendedKeep ?? full;
+        setUsefulMemories(useful);
+        setMemories(useful);
+        setQualityCounts(
+          quality
+            ? {
+                noisy: quality.noisyMemories.length,
+                duplicates: quality.duplicateGroups.reduce((total, group) => total + group.count - 1, 0),
+              }
+            : null,
+        );
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
@@ -34,7 +50,24 @@ export default function MemoryPage() {
           <h1 className="text-3xl font-semibold text-white">Memory Timeline</h1>
           <p className="mt-2 text-slate-400">Project journey memory from retained decisions, risks, bugs, and tasks.</p>
         </div>
-        {provider ? <IconBadge tone="purple">Provider: {provider}</IconBadge> : null}
+        <div className="flex flex-wrap gap-2">
+          {provider ? <IconBadge tone="purple">Provider: {provider}</IconBadge> : null}
+          {qualityCounts ? <IconBadge tone="green">Useful default</IconBadge> : null}
+          {qualityCounts ? <IconBadge tone="orange">Noisy {qualityCounts.noisy}</IconBadge> : null}
+          {qualityCounts ? <IconBadge tone="orange">Duplicates {qualityCounts.duplicates}</IconBadge> : null}
+          <button
+            onClick={() => {
+              setShowAll((current) => {
+                const next = !current;
+                setMemories(next ? allMemories : usefulMemories);
+                return next;
+              });
+            }}
+            className="rounded-md border border-workspace-border bg-white/5 px-3 py-1 text-xs font-medium text-slate-300 hover:bg-white/10"
+          >
+            {showAll ? "Useful memories" : "All/debug memories"}
+          </button>
+        </div>
       </div>
 
       {loading ? <div className="mt-5"><LoadingState label="Loading memories..." /></div> : null}

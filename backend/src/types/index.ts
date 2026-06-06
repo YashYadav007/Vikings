@@ -26,6 +26,14 @@ export interface ProjectBrain {
   chunkCount?: number;
   createdAt?: string;
   updatedAt?: string;
+  lastIndexedCommitSha?: string;
+  indexedAt?: string;
+  ragProvider?: "local" | "pgvector";
+  semanticIndex?: boolean;
+  embeddingProvider?: string;
+  embeddingModel?: string;
+  embeddingDimensions?: number;
+  fileHashes?: Record<string, string>;
 }
 
 export interface RagChunk {
@@ -57,6 +65,7 @@ export interface Memory {
   provider?: "local" | "hindsight";
   fallbackUsed?: boolean;
   fallbackReason?: string;
+  memoryKey?: string;
 }
 
 export interface ScoredMemory extends Memory {
@@ -109,6 +118,23 @@ export interface MemoryDraft {
   content: string;
   relatedFiles: string[];
   tags?: string[];
+  memoryKey?: string;
+}
+
+export interface MemoryQualityDecision {
+  candidate: MemoryDraft;
+  keep: boolean;
+  reason: string;
+  importance: number;
+  normalizedKey: string;
+}
+
+export interface HindsightRetentionReport {
+  provider: "local" | "hindsight";
+  fallbackUsed: boolean;
+  retained: Array<{ type: MemoryType; title: string; memoryKey: string; importance: number }>;
+  skipped: Array<{ type: MemoryType; title: string; reason: string; importance: number }>;
+  duplicatesSkipped: number;
 }
 
 export interface MemoryReflection {
@@ -191,10 +217,11 @@ export interface GeneratedTask {
   error?: string;
   memoryToSave?: MemoryDraft[];
   incrementalRagUpdate?: IncrementalRagUpdateResult;
-  agentProvider?: "llm" | "mock" | "claude-code";
+  agentProvider?: "gemini" | "openai" | "llm" | "ollama" | "mock" | "claude-code" | "curated-demo";
   memoryInfluence?: string;
   confidence?: number;
   savedMemories?: Memory[];
+  hindsightRetention?: HindsightRetentionReport;
 }
 
 export interface ImportedProject extends ProjectBrain {

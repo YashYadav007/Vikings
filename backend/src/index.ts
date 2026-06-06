@@ -4,6 +4,7 @@ import express, { ErrorRequestHandler } from "express";
 import { ZodError } from "zod";
 import { createChatRouter } from "./routes/chat.routes";
 import { createDevRouter } from "./routes/dev.routes";
+import { createDemoRouter } from "./routes/demo.routes";
 import { createAgentRouter } from "./routes/agent.routes";
 import { createGraphRouter } from "./routes/graph.routes";
 import { createMemoryRouter } from "./routes/memory.routes";
@@ -24,6 +25,8 @@ import { LocalMemoryService } from "./services/local-memory.service";
 import { LocalRagService } from "./services/local-rag.service";
 import { createMemoryProvider } from "./services/memory/memory-provider.factory";
 import { createCodingAgentProvider } from "./services/coding-agent/coding-agent-provider.factory";
+import { MemoryQualityService } from "./services/memory/memory-quality.service";
+import { DemoTaskService } from "./services/demo/demo-task.service";
 import { GitHubWriteService } from "./services/github-write.service";
 import { PatchEngineService } from "./services/patch-engine.service";
 import { ProjectService } from "./services/project.service";
@@ -37,6 +40,7 @@ const port = Number(process.env.PORT ?? 4000);
 
 const ragService = new LocalRagService();
 const memoryService = new LocalMemoryService(createMemoryProvider());
+const memoryQualityService = new MemoryQualityService();
 const llmService = new LlmService();
 const graphService = new GraphService();
 const taskService = new TaskService();
@@ -57,6 +61,15 @@ const agentExecutionService = new AgentExecutionService(
   patchEngineService,
   githubWriteService,
   codingAgentProvider,
+  memoryQualityService,
+);
+const demoTaskService = new DemoTaskService(
+  projectService,
+  ragService,
+  memoryService,
+  taskService,
+  githubWriteService,
+  memoryQualityService,
 );
 
 app.use(cors());
@@ -71,13 +84,14 @@ app.get("/health", (_req, res) => {
 
 app.use("/api/projects", createProjectsRouter(projectService, ragService, memoryService, graphService, taskService));
 app.use("/api/rag", createRagRouter(ragService));
-app.use("/api/memory", createMemoryRouter(memoryService));
+app.use("/api/memory", createMemoryRouter(memoryService, memoryQualityService));
 app.use("/api/chat", createChatRouter(agentService));
 app.use("/api/agent", createAgentRouter(agentExecutionService));
 app.use("/api/patches", createPatchesRouter(agentExecutionService));
 app.use("/api/graph", createGraphRouter(graphService, projectService, ragService, memoryService, taskService));
 app.use("/api/tasks", createTasksRouter(taskService, agentExecutionService));
 app.use("/api/dev", createDevRouter(projectService, ragService, memoryService, taskService));
+app.use("/api/demo", createDemoRouter(demoTaskService));
 app.use("/api/system", createSystemRouter(memoryService, ragService, llmService, githubWriteService, codingAgentProvider));
 app.use(
   "/api/repos",
