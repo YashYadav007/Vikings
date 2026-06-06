@@ -8,3 +8,6 @@ logs/
 
 backend/dist/
 backend/.data/
+
+# Viking AI Next.js sub-project (has its own repo)
+viking-ai/
